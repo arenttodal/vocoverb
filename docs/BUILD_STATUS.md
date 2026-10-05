@@ -1,22 +1,23 @@
-# Build status (kept current during the unattended build)
+# Build status
 
 ## Environment
-- Development container: Linux x86_64 (no macOS, no Xcode). Mac binaries are produced by the GitHub Actions
-  workflow `.github/workflows/build.yml` on `macos-15` runners for the repository's own branch.
-- Local commands: `./scripts/build-linux.sh` (Linux dev build), `./scripts/test.sh`.
-- Mac one-command build: `./scripts/build-and-package-macos.sh universal` (or `arm64`).
+- Development container: Linux x86_64 (no macOS). Native Mac binaries are built by GitHub Actions
+  (`.github/workflows/build.yml`, `macos-15` runner, Xcode toolchain, universal arm64 + x86_64) on every push to the
+  working branch; artifacts: `playable-ambience-macos` (ZIP, DMG, checksums) and `playable-ambience-macos-reports`.
+- Mac one-command build on your own machine: `./scripts/build-and-package-macos.sh universal` (or `arm64`).
 
-## Completed
-- Core DSP engine, all modes (see README coverage table); 32 headless tests passing.
-- JUCE VST3 + Standalone build on Linux; standalone `--selftest` passing (demo audio, 16 presets, state roundtrip,
-  user preset save/load, offline export, editor + screenshots).
-- pluginval v1.0.4 strictness 5 on the Linux VST3: SUCCESS.
-- Benchmarks (`pa_bench`), audio comparisons (`pa_render`), packaging/validation/install scripts, CI workflow.
+## Completed (verified)
+- Core DSP engine, all modes; 34 headless tests passing on Linux and macOS (incl. no-allocation and sample-rate
+  transition tests); AddressSanitizer + UBSan clean.
+- macOS CI run 1 (commit 6f5c870): universal build of Playable Ambience.app / .vst3 / .component (aumf) /
+  Audio.component (aufx), core tests PASS, standalone self-test PASS, packaging OK (ZIP 59 MB, DMG 64 MB, source
+  ZIP), self-test of the app extracted from the ZIP PASS. Validation step reported 4 failures caused by the
+  validation script's universal-binary `otool` parsing (fixed in 5987d7f).
+- Linux CI: build, tests, self-test, pluginval v1.0.4 strictness 8 on the VST3: PASS.
 
-## In progress / next actions
-- Run the macOS CI job; fix any AppleClang/AU-specific issues it reveals; collect auval + pluginval reports.
-- UI polish passes against the mockup at the documented sizes.
+## Next actions
+- Confirm auval / pluginval results on macOS from CI run 2 (now printed into the job log).
 
 ## Known limitations
-- Live/Logic host tests, hardware live input and listening tests: not possible here (documented in the report).
-- Signing: ad-hoc only (no Developer ID credentials).
+- Live/Logic host tests, hardware live input and listening tests are not possible in this environment.
+- Ad-hoc signed local builds (no Developer ID / notarization credentials).
