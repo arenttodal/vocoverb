@@ -98,6 +98,31 @@ struct SelfTest
         check (okCount == (int) fp.size(), "all " + juce::String ((int) fp.size()) + " factory presets load and render finite, non-silent audio");
         if (src) src->stop();
 
+        // 2b. double-precision host buffers and latency-matched bypass
+        {
+            pp->presets().loadFactory (5);
+            juce::AudioBuffer<double> db (2, 256);
+            bool finite = true; double e = 0;
+            if (src) { src->selectDemo (0); src->play(); }
+            for (int b = 0; b < 200; ++b)
+            {
+                db.clear();
+                proc->processBlock (db, midi);
+                for (int ch = 0; ch < 2; ++ch) for (int s = 0; s < 256; ++s) { const double v = db.getSample (ch, s); finite &= std::isfinite (v); e += v * v; }
+            }
+            check (finite && e > 0.0, "double-precision processBlock renders finite, non-silent audio");
+            if (src) src->stop();
+            // bypass with a non-zero reported latency must delay the dry input by exactly that latency
+            proc->setLatencySamples (300);
+            juce::AudioBuffer<float> bb (2, 512);
+            bb.clear(); bb.setSample (0, 0, 1.0f); bb.setSample (1, 0, 1.0f);
+            proc->processBlockBypassed (bb, midi);
+            check (std::abs (bb.getSample (0, 300) - 1.0f) < 1.0e-6f && std::abs (bb.getSample (0, 0)) < 1.0e-6f, "host bypass delays dry by the reported latency");
+            proc->setLatencySamples (0);
+            const double tail = proc->getTailLengthSeconds();
+            check (std::isfinite (tail) && tail >= 120.0, "tail policy: non-VST3 wrappers report a finite " + juce::String (tail, 0) + " s tail (VST3 reports infinite)");
+        }
+
         // 3. state roundtrip into a second instance
         juce::MemoryBlock state;
         pp->setValue (BbdFeedback, 61.0f); pp->setValue (IvTap2Semi, -5.0f); pp->setValue (WaDecay, 77.0f);
@@ -108,6 +133,20 @@ struct SelfTest
         int mismatches = 0;
         for (int i = 0; i < kNumParams; ++i) if (std::abs (p2->value (i) - pp->value (i)) > 1.0e-3f && i != Freeze) ++mismatches;
         check (mismatches == 0, "session state roundtrip restores every parameter (" + juce::String (mismatches) + " mismatches)");
+
+        // 3b. A/B: B gets different values, switching back and forth restores both complete states
+        {
+            auto& pm = pp->presets();
+            pp->setValue (PlDecay, 5.0f); pp->setValue (HarmMethod, 2.0f); pp->setValue (IvTap3Semi, -7.0f);
+            pm.switchAB (1);
+            pp->setValue (PlDecay, 17.0f); pp->setValue (HarmMethod, 3.0f); pp->setValue (IvTap3Semi, 5.0f);
+            pm.switchAB (0);
+            const bool aOk = std::abs (pp->value (PlDecay) - 5.0f) < 0.01f && (int) pp->value (HarmMethod) == 2 && (int) pp->value (IvTap3Semi) == -7;
+            pm.switchAB (1);
+            const bool bOk = std::abs (pp->value (PlDecay) - 17.0f) < 0.01f && (int) pp->value (HarmMethod) == 3 && (int) pp->value (IvTap3Semi) == 5;
+            pm.switchAB (0);
+            check (aOk && bOk, "A/B switching restores complete states (including inactive-mode values)");
+        }
 
         // 4. user preset save/load roundtrip (uniquely named, removed afterwards)
         {
@@ -151,12 +190,21 @@ struct SelfTest
             {
                 screenshotDir.createDirectory();
                 struct Shot { int w, h; float scale; const char* name; };
-                for (auto s : { Shot { 1280, 900, 1.0f, "initial-1280x900" }, Shot { 950, 720, 1.0f, "minimum-950x720" },
-                                Shot { 1280, 900, 2.0f, "retina-2x" }, Shot { 1600, 1000, 1.0f, "large-1600x1000" } })
+                const int iw = ed->getWidth(), ih = ed->getHeight();
+                for (auto s : { Shot { iw, ih, 1.0f, "initial" }, Shot { 950, 680, 1.0f, "minimum-950x680" },
+                                Shot { iw, ih, 2.0f, "retina-2x" }, Shot { 1600, 1040, 1.0f, "large-1600x1040" } })
                 {
                     ed->setSize (s.w, s.h);
-                    for (int b = 0; b < 40; ++b) { buf.clear(); proc->processBlock (buf, midi); }
-                    if (auto* pe = dynamic_cast<PluginEditor*> (ed.get())) pe->refreshForSnapshot();
+                    if (auto* pe = dynamic_cast<PluginEditor*> (ed.get()))
+                    {
+                        pe->refreshForSnapshot();
+                        // run ~8 s of audio with UI frames so the rolling displays hold real history
+                        for (int k = 0; k < 200; ++k)
+                        {
+                            for (int b = 0; b < 8; ++b) { buf.clear(); proc->processBlock (buf, midi); }
+                            pe->tickForSnapshot();
+                        }
+                    }
                     auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, s.scale);
                     juce::PNGImageFormat png;
                     auto f = screenshotDir.getChildFile (juce::String (s.name) + ".png");
@@ -167,7 +215,30 @@ struct SelfTest
                 }
                 if (auto* pe = dynamic_cast<PluginEditor*> (ed.get()))
                 {
-                    ed->setSize (1280, 900);
+                    struct State { const char* name; std::vector<std::pair<int, float>> v; };
+                    const std::vector<State> states = {
+                        { "state-interval-plate-chord", { { DelayMode, 1 }, { ReverbMode, 0 }, { NoteSource, 1 }, { HarmMethod, 2 }, { IvPitchMode, 1 } } },
+                        { "state-delay-off-intervals", { { DelayEnable, 0 }, { NoteSource, 2 }, { HarmMethod, 3 } } },
+                        { "state-arp-shift-series", { { DelayEnable, 1 }, { NoteSource, 3 }, { HarmMethod, 4 }, { Routing, 1 }, { Placement, 1 } } },
+                    };
+                    ed->setSize (iw, ih);
+                    for (const auto& stt : states)
+                    {
+                        for (auto& [i, v] : stt.v) pp->setValue (i, v);
+                        for (int k = 0; k < 120; ++k) { for (int b = 0; b < 8; ++b) { buf.clear(); proc->processBlock (buf, midi); } pe->tickForSnapshot(); }
+                        auto im = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+                        juce::FileOutputStream os3 (screenshotDir.getChildFile (juce::String (stt.name) + ".png"));
+                        if (os3.openedOk()) { os3.setPosition (0); os3.truncate(); juce::PNGImageFormat().writeImageToStream (im, os3); }
+                    }
+                    pp->presets().loadFactory (0);
+                    ed->setSize (iw, ih);
+                    for (auto* tab : { "Harmony", "Delay", "MIDI", "Mix / Timing", "Diagnostics" })
+                    {
+                        pe->showAdvancedForSnapshot (tab);
+                        auto im = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+                        juce::FileOutputStream os2 (screenshotDir.getChildFile ("advanced-" + juce::File::createLegalFileName (juce::String (tab).replace (" / ", "-")) + ".png"));
+                        if (os2.openedOk()) { os2.setPosition (0); os2.truncate(); juce::PNGImageFormat().writeImageToStream (im, os2); }
+                    }
                     pe->showAdvancedForSnapshot ("Harmony");
                     auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
                     juce::FileOutputStream os (screenshotDir.getChildFile ("advanced-panel.png"));

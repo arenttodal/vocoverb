@@ -16,6 +16,7 @@ void readHistory (const std::array<std::atomic<float>, Telemetry::kHistLen>& rin
 namespace
 {
 float levelToUnit (float lin) { return juce::jlimit (0.0f, 1.0f, (juce::Decibels::gainToDecibels (lin, -72.0f) + 66.0f) / 66.0f); }
+float levelToUnitTight (float lin) { const float v = juce::jlimit (0.0f, 1.0f, (juce::Decibels::gainToDecibels (lin, -72.0f) + 42.0f) / 42.0f); return v * v; }
 
 void drawTimeAxis (juce::Graphics& g, juce::Rectangle<float> r, double spanSec, int divisions)
 {
@@ -97,7 +98,7 @@ void DelayGraph::paint (juce::Graphics& g)
             const int a = (int) ((float) x / (float) cols * (float) n), b = std::max (a + 1, (int) ((float) (x + 1) / (float) cols * (float) n));
             float m = 0.0f;
             for (int i = a; i < b && i < n; ++i) m = std::max (m, hist[(size_t) i]);
-            colv[(size_t) x] = levelToUnit (m);
+            colv[(size_t) x] = levelToUnitTight (m * 1.6f);
         }
         for (int x = 0; x < cols; ++x)
         {

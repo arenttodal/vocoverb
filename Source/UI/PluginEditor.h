@@ -28,6 +28,7 @@ public:
     void saveExperiment();
     /** Used by the headless self-test to produce screenshots with populated graphs. */
     void refreshForSnapshot();
+    void tickForSnapshot() { timerCallback(); }
     void showAdvancedForSnapshot (const juce::String& tab);
 
 private:

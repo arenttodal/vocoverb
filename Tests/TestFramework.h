@@ -1,5 +1,6 @@
 // Minimal test harness (no external dependencies).
 #pragma once
+#include <atomic>
 #include <cstdio>
 #include <functional>
 #include <string>
@@ -13,6 +14,8 @@ struct Registrar { Registrar (const char* n, std::function<void()> f) { registry
 void fail (const char* file, int line, const std::string& msg);
 void note (const std::string& msg);
 void metric (const std::string& key, double value, const std::string& unit = "");
+extern std::atomic<long> gAllocCount;
+extern std::atomic<bool> gAllocArmed;
 } // namespace pat
 
 #define PA_CAT2(a, b) a##b

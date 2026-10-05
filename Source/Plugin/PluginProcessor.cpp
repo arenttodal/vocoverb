@@ -118,6 +118,8 @@ void PluginProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     inL.assign ((size_t) slice, 0.0f); inR.assign ((size_t) slice, 0.0f);
     outL.assign ((size_t) slice, 0.0f); outR.assign ((size_t) slice, 0.0f);
     srcL.assign ((size_t) slice, 0.0f); srcR.assign ((size_t) slice, 0.0f);
+    for (auto& b : bypassLine) b.assign ((size_t) (engine.studioLatency (2) + 16), 0.0f);
+    bypassWrite = 0;
     if (sourcePlayer) sourcePlayer->prepare (sampleRate, slice);
     appliedQuality = juce::jlimit (0, 2, (int) value (Quality));
     appliedTiming = (int) value (Timing);
@@ -264,8 +266,14 @@ void PluginProcessor::processAny (juce::AudioBuffer<T>& buffer, juce::MidiBuffer
         for (int k = 0; k < scope.blockSize1 && nev < maxEv; ++k) events[(size_t) nev++] = kbEvents[(size_t) (scope.startIndex1 + k)];
         for (int k = 0; k < scope.blockSize2 && nev < maxEv; ++k) events[(size_t) nev++] = kbEvents[(size_t) (scope.startIndex2 + k)];
     }
-    // keyboard events at offset 0 must stay sorted: stable insertion keeps host order
-    std::stable_sort (events.begin(), events.begin() + nev, [] (const MidiEvent& a, const MidiEvent& b) { return a.offset < b.offset; });
+    // keep events sorted by offset (allocation-free stable insertion sort; host order preserved for ties)
+    for (int i = 1; i < nev; ++i)
+    {
+        const MidiEvent e = events[(size_t) i];
+        int j = i - 1;
+        while (j >= 0 && events[(size_t) j].offset > e.offset) { events[(size_t) j + 1] = events[(size_t) j]; --j; }
+        events[(size_t) j + 1] = e;
+    }
 
     const int numIn = getTotalNumInputChannels();
     const int mainIn = getMainBusNumInputChannels();
@@ -312,10 +320,15 @@ void PluginProcessor::processAny (juce::AudioBuffer<T>& buffer, juce::MidiBuffer
             sourcePlayer->captureMidi (events.data() + sliceEvStart, sliceCount);
             if (extra > 0)
             {
-                // merge sequence events into the slice list (both sorted)
+                // merge sequence events into the slice list (both sorted) without allocating
                 std::rotate (events.begin() + sliceEvEnd, events.begin() + nev, events.begin() + nev + extra);
-                std::inplace_merge (events.begin() + sliceEvStart, events.begin() + sliceEvEnd, events.begin() + sliceEvEnd + extra,
-                                    [] (const MidiEvent& a, const MidiEvent& b) { return a.offset < b.offset; });
+                for (int i = sliceEvEnd; i < sliceEvEnd + extra; ++i)
+                {
+                    const MidiEvent e = events[(size_t) i];
+                    int j = i - 1;
+                    while (j >= sliceEvStart && events[(size_t) j].offset > e.offset) { events[(size_t) j + 1] = events[(size_t) j]; --j; }
+                    events[(size_t) j + 1] = e;
+                }
                 sliceCount += extra;
                 nev += extra;
                 sliceEvEnd += extra;
@@ -347,6 +360,38 @@ void PluginProcessor::processAny (juce::AudioBuffer<T>& buffer, juce::MidiBuffer
     const int w = cpuWrite.load (std::memory_order_relaxed);
     cpuRing[(size_t) w].store ((float) (secs / deadline), std::memory_order_relaxed);
     cpuWrite.store ((w + 1) % kCpuRing, std::memory_order_relaxed);
+}
+
+void PluginProcessor::processBlockBypassed (juce::AudioBuffer<float>& b, juce::MidiBuffer& m) { bypassAny (b, m); }
+void PluginProcessor::processBlockBypassed (juce::AudioBuffer<double>& b, juce::MidiBuffer& m) { bypassAny (b, m); }
+
+template <typename T>
+void PluginProcessor::bypassAny (juce::AudioBuffer<T>& buffer, juce::MidiBuffer& midi)
+{
+    midi.clear();
+    const int n = buffer.getNumSamples();
+    const int lat = getLatencySamples();
+    const int mainIn = getMainBusNumInputChannels(), numOut = getTotalNumOutputChannels();
+    const int size = (int) bypassLine[0].size();
+    if (size == 0 || lat <= 0 || lat >= size)
+    {
+        for (int ch = mainIn; ch < numOut; ++ch) buffer.clear (ch, 0, n);
+        if (mainIn == 1 && numOut >= 2) buffer.copyFrom (1, 0, buffer, 0, 0, n);
+        return;
+    }
+    for (int i = 0; i < n; ++i)
+    {
+        const int r = (bypassWrite - lat + size) % size;
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            const int src = std::min (ch, std::max (0, mainIn - 1));
+            const float x = mainIn > 0 ? (float) buffer.getSample (src, i) : 0.0f;
+            bypassLine[ch][(size_t) bypassWrite] = x;
+            if (ch < numOut) buffer.setSample (ch, i, (T) bypassLine[ch][(size_t) r]);
+        }
+        bypassWrite = (bypassWrite + 1) % size;
+    }
+    for (int ch = 2; ch < buffer.getNumChannels(); ++ch) buffer.clear (ch, 0, n);
 }
 
 void PluginProcessor::processSlice (const float* l, const float* r, float* ol, float* orr, int n, const MidiEvent* ev, int nev, const TransportInfo& tp)

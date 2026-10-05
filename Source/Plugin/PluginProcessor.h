@@ -27,6 +27,9 @@ public:
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
     bool supportsDoublePrecisionProcessing() const override { return true; }
+    /** Host bypass: dry input delayed by the reported latency (keeps host delay compensation correct). */
+    void processBlockBypassed (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processBlockBypassed (juce::AudioBuffer<double>&, juce::MidiBuffer&) override;
 
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
@@ -88,6 +91,9 @@ private:
     static BusesProperties makeBuses();
     void timerCallback() override;
     template <typename T> void processAny (juce::AudioBuffer<T>& buffer, juce::MidiBuffer& midi);
+    template <typename T> void bypassAny (juce::AudioBuffer<T>& buffer, juce::MidiBuffer& midi);
+    std::vector<float> bypassLine[2];
+    int bypassWrite = 0;
     void processSlice (const float* inL, const float* inR, float* outL, float* outR, int n, const MidiEvent* ev, int nev, const TransportInfo& tp);
     std::unique_ptr<juce::XmlElement> stateToXml() const;
     void stateFromXml (const juce::XmlElement& xml);

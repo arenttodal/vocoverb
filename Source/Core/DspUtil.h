@@ -246,7 +246,7 @@ struct AllpassDelay
     void allocate (int maxSamples) { line.allocate (maxSamples + 8); }
     inline float process (float x, float delay) noexcept
     {
-        const float d = line.readLinear (std::max (1.0f, delay));
+        const float d = delay >= 2.0f ? line.readCubic (delay) : line.readLinear (std::max (1.0f, delay));
         const float v = x + g * d;
         line.push (v);
         return d - g * v;

@@ -134,23 +134,23 @@ void PlateReverb::process (const SpaceContext& ctx, const float* inL, const floa
         // half A
         float a = A.apMod.process (xl + fbB, kApModA * S + exc + modA);
         A.d1.push (a);
-        float a1 = A.d1.readLinear (kD1A * S);
+        float a1 = A.d1.readCubic (kD1A * S);
         a1 = A.damp.process (a1);
         { const float lo = A.lowSplit1.process (a1); a1 = g * (a1 - lo) + gLow * lo; }
         a1 = A.ap2.process (a1, kAp2A * S);
         A.d2.push (a1);
-        float a2 = A.d2.readLinear (kD2A * S);
+        float a2 = A.d2.readCubic (kD2A * S);
         { const float lo = A.lowSplit2.process (a2); a2 = g * (a2 - lo) + gLow * lo; }
 
         // half B
         float b = B.apMod.process (xr + fbA, kApModB * S + exc + modB);
         B.d1.push (b);
-        float b1 = B.d1.readLinear (kD1B * S);
+        float b1 = B.d1.readCubic (kD1B * S);
         b1 = B.damp.process (b1);
         { const float lo = B.lowSplit1.process (b1); b1 = g * (b1 - lo) + gLow * lo; }
         b1 = B.ap2.process (b1, kAp2B * S);
         B.d2.push (b1);
-        float b2 = B.d2.readLinear (kD2B * S);
+        float b2 = B.d2.readCubic (kD2B * S);
         { const float lo = B.lowSplit2.process (b2); b2 = g * (b2 - lo) + gLow * lo; }
 
         const float energy = a2 * a2 + b2 * b2 + a1 * a1 + b1 * b1;

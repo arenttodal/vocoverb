@@ -38,6 +38,7 @@ if [[ -d "${PA_ROOT}/out/Audio-Examples" ]]; then ditto "${PA_ROOT}/out/Audio-Ex
 else "${RENDER}" --out "${STAGE}/Audio-Examples" > /dev/null; fi
 cp "${PA_ROOT}/docs/Quick-Start.md" "${STAGE}/Quick-Start.md"
 cp "${PA_ROOT}/docs/Feedback-Template.md" "${STAGE}/Feedback-Template.md"
+cp "${PA_ROOT}/docs/DSP.md" "${STAGE}/DSP-Report.md"
 if [[ -f "${PA_ROOT}/out/reports/Validation-Report.md" ]]; then cp "${PA_ROOT}/out/reports/Validation-Report.md" "${STAGE}/Validation-Report.md"
 else cp "${PA_ROOT}/docs/Validation-Report.md" "${STAGE}/Validation-Report.md"; fi
 mkdir -p "${STAGE}/Validation"

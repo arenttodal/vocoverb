@@ -562,7 +562,7 @@ void MainView::paint (juce::Graphics& g)
     auto collapsedNote = [&g] (juce::Rectangle<int> card, const juce::String& what) {
         g.setColour (theme::textMuted);
         g.setFont (theme::font (13.0f, 1));
-        g.drawFittedText (what + " OFF\nprocessing disabled", card.reduced (14, 10).withTrimmedTop (110).withHeight (60), juce::Justification::centredTop, 3);
+        g.drawFittedText (what + " OFF\nprocessing disabled", card.reduced (14, 10).withTrimmedTop (140).withHeight (60), juce::Justification::centredTop, 3);
     };
     if (dCollapsed && ! stacked) collapsedNote (dCard, "DELAY");
     if (rCollapsed && ! stacked) collapsedNote (rCard, "REVERB");

@@ -344,3 +344,58 @@ TEST ("graph: Studio latency aligns ordinary and harmonised paths (Depth 0 == Of
         CHECK (md < 1e-6);
     }
 }
+
+TEST ("graph: real-time path performs no heap allocation (all modes, events, switches, freeze, tail kill)")
+{
+    auto eng = std::make_unique<Engine>();
+    eng->prepare (kSr, 512);
+    ParamSet p = baseParams (1);
+    p[DelayEnable] = 1;
+    Buf in = noiseBurst (1.0, 1.0, kSr, 0.3f, 7);
+    std::vector<float> oL (512), oR (512);
+    std::vector<MidiEvent> ev = { { 3, 0x90, 48, 100, Origin::Host }, { 10, 0x90, 55, 90, Origin::Keyboard }, { 100, 0xB0, 64, 127, Origin::Host },
+                                  { 200, 0xE0, 0, 80, Origin::Host }, { 300, 0x80, 48, 0, Origin::Host }, { 400, 0xC0, 2, 0, Origin::Host } };
+    TransportInfo tp; tp.hasHost = true; tp.playing = true; tp.bpm = 120; tp.ppqAtBlockStart = 0;
+    // warm-up (first-time state) outside the measured region
+    eng->process (p, tp, in.L.data(), in.R.data(), oL.data(), oR.data(), 512, ev.data(), (int) ev.size());
+    gAllocCount.store (0);
+    gAllocArmed.store (true);
+    for (int b = 0; b < 2000; ++b)
+    {
+        const int k = b / 40;
+        p[HarmMethod] = (float) (k % 5); p[DelayMode] = (float) (k % 2); p[ReverbMode] = (float) ((k / 2) % 2);
+        p[Routing] = (float) ((k / 3) % 3); p[Placement] = (float) ((k / 4) % 2); p[NoteSource] = (float) ((k / 5) % 4);
+        p[Freeze] = (k % 7) > 4 ? 1.0f : 0.0f; p[Quality] = (float) ((k / 9) % 3); p[Timing] = (float) ((k / 6) % 2);
+        p[IvPitchMode] = (float) ((k / 2) % 2); p[IvDirection] = (float) (k % 3);
+        if (b % 300 == 150) eng->requestTailKill();
+        if (b % 250 == 100) eng->requestPanic();
+        tp.ppqAtBlockStart += 512.0 / kSr * 2.0;
+        const size_t off = (size_t) ((b * 512) % (int) (in.size() - 512));
+        eng->process (p, tp, in.L.data() + off, in.R.data() + off, oL.data(), oR.data(), 512, (b % 10 == 0) ? ev.data() : nullptr, (b % 10 == 0) ? (int) ev.size() : 0);
+    }
+    gAllocArmed.store (false);
+    metric ("rt.allocations", (double) gAllocCount.load());
+    CHECK_MSG (gAllocCount.load() == 0, "allocations on the audio path: " + std::to_string (gAllocCount.load()));
+}
+
+TEST ("graph: sample-rate transitions re-prepare safely (48 -> 96 -> 44.1 kHz) with buffers 32/1024")
+{
+    auto eng = std::make_unique<Engine>();
+    ParamSet p = baseParams (2);
+    p[DelayEnable] = 1; p[ReverbMode] = 1; p[Quality] = 2; p[Timing] = 1;
+    std::vector<MidiEvent> ev = { { 0, 0x90, 48, 100, Origin::Host }, { 0, 0x90, 55, 100, Origin::Host } };
+    for (double sr : { 48000.0, 96000.0, 44100.0, 96000.0 })
+        for (int block : { 32, 1024 })
+        {
+            eng->prepare (sr, block);
+            Buf in = noiseBurst (0.5, 1.5, sr, 0.3f, 5);
+            Buf out = silence (1.5, sr);
+            TransportInfo tp;
+            for (size_t pos = 0; pos + (size_t) block <= in.size(); pos += (size_t) block)
+                eng->process (p, tp, in.L.data() + pos, in.R.data() + pos, out.L.data() + pos, out.R.data() + pos, block, pos == 0 ? ev.data() : nullptr, pos == 0 ? 2 : 0);
+            CHECK (finite (out));
+            CHECK_MSG (segRms (out.L, sr, 0.6, 1.4) > 1e-5, "sr " + std::to_string ((int) sr) + " block " + std::to_string (block));
+            const int L = eng->studioLatency (2);
+            metric ("srTransition.studioLatency@" + std::to_string ((int) sr), L, "samples");
+        }
+}
