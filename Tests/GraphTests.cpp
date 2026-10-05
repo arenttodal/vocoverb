@@ -90,7 +90,7 @@ TEST ("graph: zero Depth equals ordinary ambience; full Depth with no notes remo
         CHECK_MSG (maxD < 1e-6, "Depth 0 must equal Off for method " + std::to_string (method));
         ParamSet full = baseParams (method); full[NoNotePolicy] = 1; // Release, and no MIDI at all
         full[NoteSource] = 0;
-        auto c = render (full, in, { { 0.0, 0xB0, 123, 0 } }); // all-notes-off marks MIDI as received (no stored chord)
+        auto c = render (full, in, { { 0.0, kSeqStatus, SeqPanic, 0 } }); // panic: no notes at all (stored chord fallback disabled)
         const double resid = segPeak (c.L, kSr, 0.0, 3.0);
         metric ("fullDepthNoNotes.peak.m" + std::to_string (method), resid);
         CHECK (resid < kSilence);

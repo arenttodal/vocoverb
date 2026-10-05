@@ -1,0 +1,5 @@
+#pragma once
+#define PA_BUILD_VERSION "@PA_VERSION@"
+#define PA_BUILD_GIT "@PA_GIT_HASH@"
+#define PA_JUCE_TAG "@PA_JUCE_TAG@"
+#define PA_JUCE_COMMIT "@PA_JUCE_COMMIT@"

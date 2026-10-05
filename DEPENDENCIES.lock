@@ -1,0 +1,6 @@
+# Pinned dependencies for reproducible builds (resolved 2026-10-05)
+JUCE        https://github.com/juce-framework/JUCE.git  tag 8.0.15  commit 91ad83ae34a81e0833b1a2b0866f54846370ae53
+Inter       https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip  sha256 9883fdd4a49d4fb66bd8177ba6625ef9a64aa45899767dde3d36aa425756b11e  (TTFs vendored in Resources/Fonts)
+pluginval   https://github.com/Tracktion/pluginval  tag v1.0.4  commit c6dfeaeac8e729c468d2b43a739e19ef4be922e1  (validation tool, downloaded by scripts)
+CMake       >= 3.22
+macOS       deployment target 12.0

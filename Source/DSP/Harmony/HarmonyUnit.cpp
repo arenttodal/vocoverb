@@ -28,7 +28,7 @@ int HarmonyUnit::methodLatency (int m, int quality) const noexcept
 {
     switch (m)
     {
-        case MethodFft: return FftVocoder::sizeForQuality (quality, sr);
+        case MethodFft: return FftVocoder::latencyForSize (FftVocoder::sizeForQuality (quality, sr));
         case MethodShift: return shift.latencyForQuality (quality);
         default: return 0;
     }

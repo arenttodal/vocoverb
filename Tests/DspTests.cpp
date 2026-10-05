@@ -42,7 +42,7 @@ Buf runMethod (int method, const Buf& in, std::vector<std::pair<double, std::vec
 }
 } // namespace
 
-TEST ("fft: WOLA identity reconstruction and measured latency == N")
+TEST ("fft: WOLA identity reconstruction and measured latency == N + N/4")
 {
     for (int q = 0; q < 3; ++q)
     {
@@ -57,18 +57,19 @@ TEST ("fft: WOLA identity reconstruction and measured latency == N")
         for (size_t pos = 0; pos < in.size(); pos += 64)
             f.process (ctx, in.L.data() + pos, in.R.data() + pos, out.L.data() + pos, out.R.data() + pos, 64);
         const int N = f.currentSize();
-        CHECK (f.latencySamples() == N);
-        // find best alignment by cross-correlation search around N
+        const int L = f.latencySamples();
+        CHECK (L == N + N / 4);
+        // find best alignment by search around the declared latency
         int bestLag = -1; double bestErr = 1e9;
-        for (int lag = N - 8; lag <= N + 8; ++lag)
+        for (int lag = L - 8; lag <= L + 8; ++lag)
         {
             double e = 0, s = 0;
-            for (size_t i = (size_t) N * 2; i < in.size(); ++i) { const double d = out.L[i] - in.L[i - (size_t) lag]; e += d * d; s += (double) in.L[i - (size_t) lag] * in.L[i - (size_t) lag]; }
+            for (size_t i = (size_t) N * 3; i < in.size(); ++i) { const double d = out.L[i] - in.L[i - (size_t) lag]; e += d * d; s += (double) in.L[i - (size_t) lag] * in.L[i - (size_t) lag]; }
             const double rel = std::sqrt (e / s);
             if (rel < bestErr) { bestErr = rel; bestLag = lag; }
         }
         metric ("fft.N", N); metric ("fft.measuredLatency", bestLag, "samples"); metric ("fft.reconstructionError", db (bestErr), "dB");
-        CHECK_MSG (bestLag == N, "latency must equal N");
+        CHECK_MSG (bestLag == L, "measured latency must equal the declared N + N/4");
         CHECK_MSG (db (bestErr) < -80.0, "WOLA reconstruction error too high");
     }
 }
@@ -102,9 +103,9 @@ TEST ("fft: carrier vocoding follows notes and differs from Classic")
     CHECK (fA > 0.6 && fB > 0.6 && fB > fB_A * 1.5);
     auto cl = runMethod (MethodClassic, in, { { 0.0, { 48, 52, 55 } } });
     auto ff = runMethod (MethodFft, in, { { 0.0, { 48, 52, 55 } } });
-    // compare after aligning FFT latency (N = 2048)
+    // compare after aligning FFT latency (N + N/4 = 2560)
     double num = 0, da = 0, dbb = 0;
-    for (size_t i = 48000; i < 150000; ++i) { const double a = cl.L[i], b = ff.L[i + 2048]; num += a * b; da += a * a; dbb += b * b; }
+    for (size_t i = 48000; i < 150000; ++i) { const double a = cl.L[i], b = ff.L[i + 2560]; num += a * b; da += a * a; dbb += b * b; }
     const double corr = num / std::sqrt (da * dbb + 1e-30);
     metric ("classicVsFft.correlation", corr);
     CHECK_MSG (corr < 0.9, "FFT must not be a reskinned Classic");

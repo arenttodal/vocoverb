@@ -103,7 +103,10 @@ void Engine::handleEvent (const MidiEvent& e) noexcept
         {
             case SeqFreezeOn: seqFreeze = true; break;
             case SeqFreezeOff: seqFreeze = false; break;
-            case SeqPanic: cmdPanic.store (true); break;
+            case SeqPanic:
+                notes.allNotesOff(); voices.killAll (15.0f); arp.reset();
+                midiEverReceived = true; notesDirty = true; bendSemis = 0.0f;
+                break;
             case SeqTailKill: cmdTailKill.store (true); break;
             default: break;
         }
@@ -137,7 +140,8 @@ void Engine::handleEvent (const MidiEvent& e) noexcept
             else if (e.d1 == 1) modWheel = (float) e.d2 / 127.0f;
             else if (e.d1 == 123 || e.d1 == 124 || e.d1 == 125 || e.d1 == 126 || e.d1 == 127)
             {
-                notes.allNotesOff(); midiEverReceived = true; notesDirty = true;
+                // All Notes Off releases that origin's notes (a fresh preset's stored chord is not cancelled by it)
+                notes.allNotesOff (e.origin); notesDirty = true;
             }
             else if (e.d1 == 120)
             {
@@ -304,6 +308,7 @@ float Engine::runDelay (const SpaceContext& sc, bool freeze, const float* inL, c
               [&] (int m) { if (m == 0) bbd.beginClear(); else ivd.beginClear(); },
               [&] (int m, int budget) { return m == 0 ? bbd.clearStep (budget) : ivd.clearStep (budget); });
 
+    if (killState != 2) delayLooper.clearStep (kClearBudget / 4); // finishes any stale-capture clear
     // loop capture on the delay output (records continuously while not frozen)
     const float tMs = dStage.active == 0 ? bbd.currentTimeMs() : ivd.currentTimeMs();
     float loopSec = tMs * 0.001f * std::max (1.0f, std::round (1.0f / std::max (0.03f, tMs * 0.001f)));
@@ -369,6 +374,7 @@ void Engine::process (const ParamSet& params, const TransportInfo& tp, const flo
     {
         notes.allNotesOff(); voices.killAll (40.0f); arp.reset();
         midiEverReceived = false; seqFreeze = false; notesDirty = true;
+        if (! delayLooper.isFrozen()) delayLooper.beginClear(); // drop stale captured audio
     }
     if (cmdPanic.exchange (false))
     {
@@ -674,8 +680,14 @@ void Engine::processChunk (const float* inL, const float* inR, float* outL, floa
             bucketCount = 0; bucketWet = bucketDry = 0.0f; delayOutPeak = reverbOutPeak = 0.0f;
         }
     }
-    float pkL = 0, pkR = 0;
-    for (int i = 0; i < n; ++i) { pkL = std::max (pkL, std::abs (outL[i])); pkR = std::max (pkR, std::abs (outR[i])); }
+    float pkL = 0, pkR = 0, eWet = 0;
+    for (int i = 0; i < n; ++i)
+    {
+        pkL = std::max (pkL, std::abs (outL[i])); pkR = std::max (pkR, std::abs (outR[i]));
+        eWet += wl[i] * wl[i] + wr[i] * wr[i];
+    }
+    telemetry.wetEnergy.fetch_add (eWet, std::memory_order_relaxed);
+    telemetry.wetEnergyCount.fetch_add (n, std::memory_order_relaxed);
     Telemetry::maxStore (telemetry.outPeakL, pkL);
     Telemetry::maxStore (telemetry.outPeakR, pkR);
     if (prot) { telemetry.protectionActive.store (true, std::memory_order_relaxed); telemetry.protectionCount.fetch_add (1, std::memory_order_relaxed); }

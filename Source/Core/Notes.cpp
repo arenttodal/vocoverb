@@ -119,6 +119,21 @@ void NoteManager::allNotesOff() noexcept
     prevPhys = 0;
 }
 
+void NoteManager::allNotesOff (Origin o) noexcept
+{
+    for (int i = 0; i < numHeld;)
+    {
+        if (held[(size_t) i].origin == (uint8_t) o) { for (int j = i; j < numHeld - 1; ++j) held[(size_t) j] = held[(size_t) j + 1]; --numHeld; }
+        else ++i;
+    }
+    if (numHeld == 0)
+    {
+        latched.clear(); lastChord.clear(); eff.clear();
+        holdingLast = false; numRecentRel = 0; prevPhys = 0;
+    }
+    else recompute (0.0);
+}
+
 void NoteManager::setLatch (bool on) noexcept
 {
     if (on == latch) return;

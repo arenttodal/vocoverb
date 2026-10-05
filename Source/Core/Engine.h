@@ -42,7 +42,7 @@ public:
     /** Commands (thread safe, applied at next block). */
     void requestPanic() noexcept { cmdPanic.store (true); }
     void requestTailKill() noexcept { cmdTailKill.store (true); }
-    void requestStateReset() noexcept { cmdStateReset.store (true); } // after preset load: clear notes, keep tails
+    void requestStateReset() noexcept { cmdStateReset.store (true); } // after preset load: clear notes + stale capture, keep tails
 
     Telemetry telemetry;
     /** Diagnostics */

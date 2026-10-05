@@ -1,0 +1,93 @@
+name: build-test-package
+
+on:
+  push:
+    branches: [ "main", "claude/**" ]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    name: macOS universal (build, test, auval, pluginval, package)
+    runs-on: macos-15
+    timeout-minutes: 120
+    env:
+      PA_CI: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          cmake --version
+          (command -v ninja && ninja --version) || brew install ninja
+      - name: Cache JUCE checkout
+        uses: actions/cache@v4
+        with:
+          path: .deps/JUCE
+          key: juce-8.0.15-91ad83ae34a81e0833b1a2b0866f54846370ae53
+      - name: Build, test, validate, package
+        run: ./scripts/build-and-package-macos.sh universal
+      - name: Upload release archives
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playable-ambience-macos
+          path: |
+            dist/*.zip
+            dist/*.dmg
+            dist/SHA256SUMS-*.txt
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Upload reports and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playable-ambience-macos-reports
+          path: |
+            out/reports/**
+            out/screenshots/**
+            out/logs/**
+          if-no-files-found: warn
+          retention-days: 30
+
+  linux:
+    name: Linux (core tests, VST3 build, self-test, pluginval)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libasound2-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev \
+            libfreetype-dev libfontconfig1-dev libgl1-mesa-dev xvfb ninja-build
+      - name: Build
+        run: ./scripts/build-linux.sh build
+      - name: Test
+        run: ./scripts/test.sh build
+      - name: pluginval (VST3)
+        run: |
+          curl -sSL -o pv.zip https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Linux.zip && unzip -o -q pv.zip
+          xvfb-run -a ./pluginval --strictness-level 8 --validate-in-process --timeout-ms 900000 \
+            "build/PlayableAmbience_artefacts/Release/VST3/Playable Ambience.vst3" | tee out/reports/pluginval-linux-vst3.txt
+      - name: Sanitizer core tests
+        run: |
+          cmake -S . -B build-asan -G Ninja -DPA_BUILD_PLUGIN=OFF -DPA_SANITIZE=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build build-asan --target pa_tests
+          ./build-asan/pa_tests | tee out/reports/sanitizer-tests.txt
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playable-ambience-linux-reports
+          path: |
+            out/reports/**
+            out/screenshots/**
+          retention-days: 30

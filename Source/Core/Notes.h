@@ -60,6 +60,7 @@ public:
     void noteOff (Origin o, int ch, int note, double timeSec) noexcept;
     void sustain (int ch, bool down, double timeSec) noexcept;
     void allNotesOff() noexcept;      // releases everything incl. latch and hold
+    void allNotesOff (Origin o) noexcept; // releases one origin's notes; clears latch/hold when nothing remains held
     void setLatch (bool on) noexcept;
     void setPolicy (int noNotePolicy) noexcept { policy = noNotePolicy; }
     void setChordWindow (double sec) noexcept { chordWindow = sec; }

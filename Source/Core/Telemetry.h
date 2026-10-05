@@ -37,6 +37,8 @@ struct Telemetry
     std::atomic<float> sampleRate { 48000 };
     std::atomic<int> clearing { 0 };
     std::atomic<int> arpNote { -1 };
+    std::atomic<float> wetEnergy { 0 };   // sum of squares since last read (UI exchanges with 0)
+    std::atomic<int> wetEnergyCount { 0 };
 
     static void maxStore (std::atomic<float>& a, float v) noexcept
     {
