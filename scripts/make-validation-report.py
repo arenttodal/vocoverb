@@ -79,8 +79,6 @@ def main():
         w(mac.replace("# macOS wrapper validation", "### macOS (auval, pluginval, architectures, signatures)"))
     else:
         w("macOS auval / pluginval: NOT PERFORMED in this environment (see the CI artefacts or run scripts/validate-macos.sh).")
-    for f, title in (("pluginval-linux-vst3.txt", "pluginval on the Linux VST3 build")):
-        pass
     lin = read("pluginval-linux-vst3.txt")
     if lin:
         res = "PASS" if "SUCCESS" in lin else "FAIL"

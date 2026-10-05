@@ -12,6 +12,7 @@ class MainView : public juce::Component
 public:
     MainView (PluginProcessor& p, PluginEditor& e);
     int layout (int width);           // returns preferred height
+    int availableHeight = 0;          // viewport height; extra space grows the cards
     void paint (juce::Graphics&) override;
     void resized() override { layout (getWidth()); }
     void update();                    // ~30 Hz
@@ -314,7 +315,10 @@ int MainView::layout (int width)
     stacked = width < 1120;
     header = { m, y, width - 2 * m, 70 };
     y += 70 + 6;
-    const int cardH = 340;
+    const int baseTotal = stacked ? 1194 : 846;
+    const int extra = juce::jlimit (0, 600, availableHeight - baseTotal);
+    const int cardH = 340 + (stacked ? extra / 3 : extra * 6 / 10);
+    const int harmH = 236 + (stacked ? extra / 3 : extra * 4 / 10);
     if (stacked)
     {
         dCard = { m, y, width - 2 * m, dCollapsed ? 60 : cardH };
@@ -334,8 +338,8 @@ int MainView::layout (int width)
     }
     routeStrip = { m, y, width - 2 * m, 42 };
     y += 42 + 6;
-    hCard = { m, y, width - 2 * m, 236 };
-    y += 236 + 6;
+    hCard = { m, y, width - 2 * m, harmH };
+    y += harmH + 6;
     perfRow = { m, y, width - 2 * m, 106 };
     y += 106 + m;
 
@@ -451,7 +455,8 @@ int MainView::layout (int width)
         knobs.removeFromLeft (16);
         const int kw = knobs.getWidth() / 4;
         auto kr = knobs.withTrimmedTop (34);
-        for (int i = 0; i < 4; ++i) hk[i]->setBounds (kr.removeFromLeft (kw).reduced (3, 0).withHeight (std::min (124, kr.getHeight())));
+        kr = kr.withSizeKeepingCentre (kr.getWidth(), std::min (124, kr.getHeight()));
+        for (int i = 0; i < 4; ++i) hk[i]->setBounds (kr.removeFromLeft (kw).reduced (3, 0));
         sourceBarArea = c.removeFromTop (30);
         layoutSourceBar (sourceBarArea);
         c.removeFromTop (4);
@@ -681,7 +686,7 @@ PluginEditor::PluginEditor (PluginProcessor& p) : juce::AudioProcessorEditor (p)
     setResizable (true, true);
     const int extra = standalone ? 82 : 0;
     setResizeLimits (950, 680, 2400, 1700);
-    setSize (1280, 836 + extra);
+    setSize (1280, 846 + extra);
     setWantsKeyboardFocus (false);
     startTimerHz (30);
 }
@@ -706,6 +711,7 @@ void PluginEditor::resized()
     auto r = getLocalBounds();
     if (standalone) standalone->setBounds (r.removeFromTop (82).reduced (14, 6).withTrimmedBottom (-4));
     viewport.setBounds (r);
+    view->availableHeight = r.getHeight();
     const int w = r.getWidth() - (view->getHeight() > r.getHeight() ? viewport.getScrollBarThickness() : 0);
     const int h = view->layout (w);
     view->setSize (w, h);

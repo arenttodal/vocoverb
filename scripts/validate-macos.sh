@@ -57,7 +57,7 @@ fi
 for b in "${APP}" "${VST3}" "${AUM}" "${AUA}"; do
   exe="$(find "${b}/Contents/MacOS" -type f -perm -u+x | head -1)"
   archs="$(lipo -archs "${exe}" 2>/dev/null || echo unknown)"
-  libs="$(otool -L "${exe}" | tail -n +2 | awk '{print $1}' | grep -v -E '^/System/|^/usr/lib/' | tr '\n' ' ' || true)"
+  libs="$(otool -L "${exe}" | grep -v ':$' | awk '{print $1}' | grep -v -E '^/System/|^/usr/lib/' | sort -u | tr '\n' ' ' || true)"
   if codesign --verify --strict "${b}" >/dev/null 2>&1; then sv="valid"; else sv="unsigned/invalid (packaging re-signs)"; fi
   status_line "$(basename "${b}") binary" "${archs}" "non-system libs: ${libs:-none}; build-tree signature ${sv}"
   [[ -z "${libs}" ]] || fails=$((fails+1))

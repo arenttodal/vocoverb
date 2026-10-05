@@ -33,7 +33,8 @@ private:
     juce::ComboBox sourceBox;
     juce::TextButton loadFile { "Load File..." }, settings { "Audio / MIDI" }, keepTail { "Keep Tail" }, liveInput { "Live Input" },
         exportBtn { "Export WAV" }, saveExp { "Save Experiment" };
-    IconButton play { IconButton::Icon::Play, "Play / pause the source" }, stop { IconButton::Icon::Stop, "Stop (tail rings unless Keep Tail is off)" },
+    juce::TextButton play { "PLAY DEMO" };
+    IconButton stop { IconButton::Icon::Stop, "Stop (tail rings unless Keep Tail is off)" },
         loop { IconButton::Icon::Loop, "Loop the source" }, recMidi { IconButton::Icon::Record, "Record MIDI for audition export (bounded)" };
     juce::Slider level;
     SeekBar seek;

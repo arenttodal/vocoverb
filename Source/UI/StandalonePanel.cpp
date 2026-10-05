@@ -33,6 +33,7 @@ StandalonePanel::StandalonePanel (PluginProcessor& p) : proc (p), src (*p.source
     };
     loadFile.setTooltip ("Load a WAV, AIFF or FLAC file (you can also drag and drop onto the window)");
     play.onClick = [this] { if (src.isPlaying()) src.pause(); else src.play(); };
+    play.setTooltip ("Play / pause the selected source (demo, experiment or file)");
     stop.onClick = [this] { src.stop(); };
     loop.setClickingTogglesState (true);
     loop.setToggleState (src.isLooping(), juce::dontSendNotification);
@@ -136,6 +137,11 @@ void StandalonePanel::exportAudition()
 void StandalonePanel::timerCallback()
 {
     play.setToggleState (src.isPlaying(), juce::dontSendNotification);
+    {
+        auto d = src.currentData();
+        const juce::String t = src.isPlaying() ? "PAUSE" : (d && d->kind == SourcePlayer::Kind::File ? "PLAY FILE" : (d && d->kind == SourcePlayer::Kind::Experiment ? "PLAY EXPERIMENT" : "PLAY DEMO"));
+        if (play.getButtonText() != t) play.setButtonText (t);
+    }
     if (auto* h = StandaloneHost::instance()) liveInput.setToggleState (h->liveInputActive(), juce::dontSendNotification);
     juce::String s;
     if (exporter.isBusy()) s = "Exporting... " + juce::String ((int) (exporter.progress() * 100.0f)) + " %";
@@ -168,7 +174,8 @@ void StandalonePanel::resized()
     row1.removeFromLeft (6);
     loadFile.setBounds (row1.removeFromLeft (94));
     row1.removeFromLeft (10);
-    play.setBounds (row1.removeFromLeft (30));
+    play.setBounds (row1.removeFromLeft (128));
+    row1.removeFromLeft (4);
     stop.setBounds (row1.removeFromLeft (30));
     loop.setBounds (row1.removeFromLeft (30));
     row1.removeFromLeft (8);

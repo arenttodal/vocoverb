@@ -8,7 +8,7 @@ change the chord of the remaining tail with the keys.
    cannot be opened, Control-click it and choose **Open**. These are ad-hoc signed local builds, not notarized.
 2. Open **~/Applications/Playable Ambience.app**. If it is blocked, Control-click > Open, or System Settings >
    Privacy & Security > **Open Anyway** (this approves only this app).
-3. Click **Audio / MIDI** to pick your output device, then press **▶** in the SOURCE strip. The demo source is a
+3. Click **Audio / MIDI** to pick your output device, then press **PLAY DEMO** in the SOURCE strip. The demo source is a
    synthetic sung phrase followed by silence: listen to the tail after the phrase ends.
 
 ## 2. Change the harmony

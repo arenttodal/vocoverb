@@ -223,9 +223,8 @@ void PluginProcessor::processAny (juce::AudioBuffer<T>& buffer, juce::MidiBuffer
     if (auto* ph = getPlayHead())
         if (auto pos = ph->getPosition())
         {
-            tp.hasHost = ! isStandalone();
             tp.playing = pos->getIsPlaying();
-            if (auto bpm = pos->getBpm()) tp.bpm = *bpm;
+            if (auto bpm = pos->getBpm()) { tp.bpm = *bpm; tp.hasHost = ! isStandalone(); }
             if (auto ppq = pos->getPpqPosition()) tp.ppqAtBlockStart = *ppq;
         }
     lastHostPlaying.store (tp.playing);

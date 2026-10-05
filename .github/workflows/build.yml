@@ -34,6 +34,30 @@ jobs:
           key: juce-8.0.15-91ad83ae34a81e0833b1a2b0866f54846370ae53
       - name: Build, test, validate, package
         run: ./scripts/build-and-package-macos.sh universal
+      - name: Print validation details
+        if: always()
+        run: |
+          for f in out/reports/validation-macos.md out/reports/Validation-Report.md; do echo "===== $f"; cat "$f" 2>/dev/null || true; done
+          for f in out/reports/auval-aumf.txt out/reports/auval-aufx.txt out/reports/pluginval-vst3.txt out/reports/pluginval-au.txt out/reports/pluginval-au-audio.txt; do
+            echo "===== $f (tail)"; tail -25 "$f" 2>/dev/null || true; done
+          echo "===== benchmark"; cat out/reports/benchmark.txt 2>/dev/null || true
+      - name: Installer / uninstaller test (throwaway HOME)
+        run: |
+          set -euo pipefail
+          T="$RUNNER_TEMP/pa-install"; mkdir -p "$T/home"
+          Z=$(ls dist/Playable-Ambience-*-macOS-*-local-build.zip | head -1)
+          ditto -x -k "$Z" "$T/pkg"
+          P=$(ls -d "$T/pkg"/Playable-Ambience-*)
+          HOME="$T/home" bash "$P/Install Playable Ambience.command" < /dev/null | tee out/reports/installer-test.txt
+          for f in "Applications/Playable Ambience.app" "Library/Audio/Plug-Ins/VST3/Playable Ambience.vst3" \
+                   "Library/Audio/Plug-Ins/Components/Playable Ambience.component" "Library/Audio/Plug-Ins/Components/Playable Ambience Audio.component"; do
+            test -d "$T/home/$f" || { echo "missing after install: $f"; exit 1; }
+          done
+          HOME="$T/home" bash "$P/Install Playable Ambience.command" < /dev/null >> out/reports/installer-test.txt   # reinstall -> backup path
+          test -d "$T/home/Library/Application Support/Playable Ambience/Backups"
+          HOME="$T/home" bash "$P/Uninstall Playable Ambience.command" | tee -a out/reports/installer-test.txt
+          test ! -e "$T/home/Applications/Playable Ambience.app"
+          echo "INSTALLER TEST PASSED" | tee -a out/reports/installer-test.txt
       - name: Upload release archives
         if: always()
         uses: actions/upload-artifact@v4
