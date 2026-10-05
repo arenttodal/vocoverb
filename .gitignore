@@ -1,0 +1,7 @@
+.deps/
+build*/
+out/
+dist/
+*.swp
+.DS_Store
+__pycache__/
