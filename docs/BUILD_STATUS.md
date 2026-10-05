@@ -13,10 +13,16 @@
   Audio.component (aufx), core tests PASS, standalone self-test PASS, packaging OK (ZIP 59 MB, DMG 64 MB, source
   ZIP), self-test of the app extracted from the ZIP PASS. Validation step reported 4 failures caused by the
   validation script's universal-binary `otool` parsing (fixed in 5987d7f).
-- Linux CI: build, tests, self-test, pluginval v1.0.4 strictness 8 on the VST3: PASS.
+- macOS CI run 2 (commit 5987d7f, run https://github.com/arenttodal/vocoverb/actions/runs/37382773602): all green.
+  auval -strict aumf PaAm Arnv and aufx PaAa Arnv: AU VALIDATION SUCCEEDED. pluginval v1.0.4 strictness 8: SUCCESS
+  for VST3, MIDI AU and Audio AU (both AUs log the warning "Disabling non-main buses failed"; the optional sidechain
+  bus is kept by the host). Installer / reinstall-with-backup / uninstaller test against a throwaway HOME: PASS.
+  Architectures: arm64 + x86_64; no non-system libraries linked.
+- Linux CI: build, tests, self-test, pluginval v1.0.4 strictness 8 on the VST3, ASan core tests: PASS.
+  Locally also pluginval strictness 10 (Linux VST3): SUCCESS.
 
 ## Next actions
-- Confirm auval / pluginval results on macOS from CI run 2 (now printed into the job log).
+- Host tests in Ableton Live and Logic Pro, hardware live input and listening feedback (see Feedback-Template).
 
 ## Known limitations
 - Live/Logic host tests, hardware live input and listening tests are not possible in this environment.
