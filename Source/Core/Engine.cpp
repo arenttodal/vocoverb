@@ -22,9 +22,12 @@ void Engine::prepare (double sampleRate, int maxBlockSize)
     carrier.prepare (sr);
     bbd.prepare (sr);
     ivd.prepare (sr);
+    tpd.prepare (sr);
     delayLooper.prepare (sr, 4.5);
     plate.prepare (sr);
     wash.prepare (sr);
+    hall.prepare (sr);
+    shimmer.prepare (sr);
     const int maxLat = 8192 + (int) std::ceil (0.1 * sr);
     hA.prepare (sr, maxLat);
     hB.prepare (sr, maxLat);
@@ -43,7 +46,8 @@ void Engine::reset()
     voices.reset();
     arp.reset();
     carrier.reset();
-    bbd.reset(); ivd.reset(); delayLooper.reset(); plate.reset(); wash.reset();
+    bbd.reset(); ivd.reset(); tpd.reset(); delayLooper.reset(); plate.reset(); wash.reset(); hall.reset(); shimmer.reset();
+    std::fill (std::begin (shimL), std::end (shimL), 0.0f); std::fill (std::begin (shimR), std::end (shimR), 0.0f);
     hA.reset(); hB.reset();
     dryDelay.clear();
     lowCutL.reset(); lowCutR.reset(); highCutL.reset(); highCutR.reset();
@@ -74,7 +78,7 @@ void Engine::initFromParams() noexcept
     studioLat = studioLatency (appliedQuality);
     killState = 0; killGain = 1.0f;
     dStage = Stage(); rStage = Stage();
-    dStage.active = p.i (DelayMode); rStage.active = p.i (ReverbMode);
+    dStage.active = std::clamp (p.i (DelayMode), 0, kModes - 1); rStage.active = std::clamp (p.i (ReverbMode), 0, kModes - 1);
     dStage.state[dStage.active] = 1; dStage.gain[dStage.active] = 1.0f;
     rStage.state[rStage.active] = 1; rStage.gain[rStage.active] = 1.0f;
     if (! p.b (DelayEnable)) { dStage.gain[dStage.active] = 0.0f; dStage.state[dStage.active] = 0; }
@@ -245,7 +249,8 @@ void Engine::updateNotes (bool force) noexcept
 // ---------------------------------------------------------------------------------------------------- stages
 namespace
 {
-/** Shared two-mode stage logic: the wanted mode receives input; the other rings out (zero input), fades, then
+constexpr int Engine_kModes = 3;
+/** Shared multi-mode stage logic: the wanted mode receives input; the other rings out (zero input), fades, then
     clears progressively. Re-activating a clearing mode finishes its clear synchronously (bounded). */
 template <typename Run, typename BeginClear, typename ClearStep, typename Stage>
 void runStage (Stage& s, int want, bool enabled, bool fastFade, double sr, const float* levelsDb,
@@ -255,7 +260,7 @@ void runStage (Stage& s, int want, bool enabled, bool fastFade, double sr, const
 {
     for (int i = 0; i < n; ++i) { rawL[i] = rawR[i] = levL[i] = levR[i] = 0.0f; }
     const float upStep = (float) n / (0.03f * (float) sr);
-    for (int m = 0; m < 2; ++m)
+    for (int m = 0; m < Engine_kModes; ++m)
     {
         const bool wanted = enabled && m == want;
         if (wanted)
@@ -306,24 +311,24 @@ float Engine::runDelay (const SpaceContext& sc, bool freeze, const float* inL, c
     const float gs = (dStage.inputGain - g0) / (float) n;
     for (int i = 0; i < n; ++i) { const float g = g0 + gs * (float) i; inScL[i] = inL[i] * g; inScR[i] = inR[i] * g; }
 
-    const float levels[2] = { p[BbdLevel], p[IvLevel] };
+    const float levels[kModes] = { p[BbdLevel], p[IvLevel], p[TpLevel] };
     runStage (dStage, p.i (DelayMode), p.b (DelayEnable), p.b (ClearTailOnChange), sr, levels, inScL, inScR, zero, tmpL, tmpR,
               rawL, rawR, levL, levR, n,
               [&] (int m, const float* a, const float* b, float* o1, float* o2, int len) {
-                  if (m == 0) bbd.process (sc, a, b, o1, o2, len); else ivd.process (sc, a, b, o1, o2, len);
+                  if (m == 0) bbd.process (sc, a, b, o1, o2, len); else if (m == 1) ivd.process (sc, a, b, o1, o2, len); else tpd.process (sc, a, b, o1, o2, len);
               },
-              [&] (int m) { if (m == 0) bbd.beginClear(); else ivd.beginClear(); },
-              [&] (int m, int budget) { return m == 0 ? bbd.clearStep (budget) : ivd.clearStep (budget); });
+              [&] (int m) { if (m == 0) bbd.beginClear(); else if (m == 1) ivd.beginClear(); else tpd.beginClear(); },
+              [&] (int m, int budget) { return m == 0 ? bbd.clearStep (budget) : (m == 1 ? ivd.clearStep (budget) : tpd.clearStep (budget)); });
 
     if (killState != 2) delayLooper.clearStep (kClearBudget / 4); // finishes any stale-capture clear
     // loop capture on the delay output (records continuously while not frozen)
-    const float tMs = dStage.active == 0 ? bbd.currentTimeMs() : ivd.currentTimeMs();
+    const float tMs = dStage.active == 0 ? bbd.currentTimeMs() : (dStage.active == 1 ? ivd.currentTimeMs() : tpd.currentTimeMs());
     float loopSec = tMs * 0.001f * std::max (1.0f, std::round (1.0f / std::max (0.03f, tMs * 0.001f)));
     loopSec = clampf (loopSec, 0.25f, 3.5f);
     // apply looper to raw, then rebuild levelled output with the current level mix
     float lvl = 0.0f, gsum = 0.0f;
-    for (int m = 0; m < 2; ++m) { lvl += dStage.gain[m] * dStage.level[m]; gsum += dStage.gain[m]; }
-    const float levelMix = gsum > 1.0e-6f ? lvl / gsum : dbToGain (dStage.active == 0 ? p[BbdLevel] : p[IvLevel]);
+    for (int m = 0; m < kModes; ++m) { lvl += dStage.gain[m] * dStage.level[m]; gsum += dStage.gain[m]; }
+    const float levelMix = gsum > 1.0e-6f ? lvl / gsum : dbToGain (levels[dStage.active]);
     if (freeze || delayLooper.isFrozen())
     {
         delayLooper.process (freeze, loopSec, rawL, rawR, rawL, rawR, n);
@@ -338,14 +343,19 @@ float Engine::runDelay (const SpaceContext& sc, bool freeze, const float* inL, c
 float Engine::runReverb (const SpaceContext& sc, const float* inL, const float* inR,
                          float* rawL, float* rawR, float* levL, float* levR, int n) noexcept
 {
-    const float levels[2] = { p[PlLevel], p[WaLevel] };
-    runStage (rStage, p.i (ReverbMode), p.b (ReverbEnable), p.b (ClearTailOnChange), sr, levels, inL, inR, zero, tmpL, tmpR,
+    const float levels[kModes] = { p[PlLevel], p[WaLevel], p[HaLevel] };
+    // shimmer: last chunk's pitch-shifted reverb output re-enters the reverb input (one-chunk loop delay)
+    const float shimAmt = p[Shimmer] / 100.0f;
+    for (int i = 0; i < n; ++i) { revInL[i] = inL[i] + shimL[i]; revInR[i] = inR[i] + shimR[i]; }
+    runStage (rStage, p.i (ReverbMode), p.b (ReverbEnable), p.b (ClearTailOnChange), sr, levels, revInL, revInR, zero, tmpL, tmpR,
               rawL, rawR, levL, levR, n,
               [&] (int m, const float* a, const float* b, float* o1, float* o2, int len) {
-                  if (m == 0) plate.process (sc, a, b, o1, o2, len); else wash.process (sc, a, b, o1, o2, len);
+                  if (m == 0) plate.process (sc, a, b, o1, o2, len); else if (m == 1) wash.process (sc, a, b, o1, o2, len); else hall.process (sc, a, b, o1, o2, len);
               },
-              [&] (int m) { if (m == 0) plate.beginClear(); else wash.beginClear(); },
-              [&] (int m, int budget) { return m == 0 ? plate.clearStep (budget) : wash.clearStep (budget); });
+              [&] (int m) { if (m == 0) plate.beginClear(); else if (m == 1) wash.beginClear(); else hall.beginClear(); },
+              [&] (int m, int budget) { return m == 0 ? plate.clearStep (budget) : (m == 1 ? wash.clearStep (budget) : hall.clearStep (budget)); });
+    static const float kShimSemis[5] = { 12.0f, 7.0f, 19.0f, 24.0f, -12.0f };
+    shimmer.process (p.b (ReverbEnable) ? shimAmt : 0.0f, kShimSemis[std::clamp (p.i (ShimmerPitch), 0, 4)], rawL, rawR, shimL, shimR, n);
     telemetry.reverbFrozen.store (sc.freeze, std::memory_order_relaxed);
     return rStage.enable();
 }
@@ -361,9 +371,11 @@ bool Engine::clearProgress (int budget) noexcept
     bool done = true;
     done = bbd.clearStep (budget) && done;
     done = ivd.clearStep (budget) && done;
+    done = tpd.clearStep (budget) && done;
     done = delayLooper.clearStep (budget) && done;
     done = plate.clearStep (budget) && done;
     done = wash.clearStep (budget) && done;
+    done = hall.clearStep (budget) && done;
     return done;
 }
 
@@ -516,7 +528,8 @@ void Engine::processChunk (const float* inL, const float* inR, float* outL, floa
         if (killGain <= 0.0f)
         {
             killState = 2;
-            bbd.beginClear(); ivd.beginClear(); delayLooper.beginClear(); plate.beginClear(); wash.beginClear();
+            bbd.beginClear(); ivd.beginClear(); tpd.beginClear(); delayLooper.beginClear(); plate.beginClear(); wash.beginClear(); hall.beginClear();
+            shimmer.reset(); std::fill (std::begin (shimL), std::end (shimL), 0.0f); std::fill (std::begin (shimR), std::end (shimR), 0.0f);
             hA.reset(); hB.reset();
             if (pendingQuality >= 0) { appliedQuality = pendingQuality; pendingQuality = -1; studioLat = studioLatency (appliedQuality); }
         }

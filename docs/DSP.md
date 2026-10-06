@@ -1,4 +1,4 @@
-# DSP report — Playable Ambience 0.1.0
+# DSP report — Playable Ambience 0.2.0
 
 All processing is original C++ in `Source/Core` and `Source/DSP`, shared by every product. Numbers below are from
 the automated tests (`Tests/`) at 48 kHz unless stated; see the Validation Report for the measured values of a
@@ -37,6 +37,13 @@ method's synthesis path: with no input or tail the output is numerically silent 
   changes, 2-pole loop low-pass (Tone × (1−0.45·Age)), 45 Hz DC blocking, tanh saturation (drive 1+2.5·Age),
   companding colour (write compressor / read expander with mismatched times), wow + flutter + drift, Stereo /
   Ping-Pong / Mono Spread, optional signal-dependent noise (silent without signal). Max-feedback test: bounded.
+- **Tape** (new in 0.2): one tape loop (3.3 s) with three playback heads at 1×, 2× and 3× the head-1 Time
+  (head spacing of the classic multi-head echoes), seven head combinations, feedback from the active heads normalised
+  by √heads, record saturation with unity small-signal gain (Drive only adds compression and even/odd harmonics,
+  never loop gain), per-head playback head bump (+2 dB shelf at 110 Hz) and two-stage gap loss (Tone), wow, flutter
+  and drift applied as a tape-speed deviation (excursion grows with head distance), motor glide (0.32 s) on time
+  changes, optional hiss that follows the programme and fades ~3 s after it stops. Feedback above ≈100 % runs away
+  into bounded self-oscillation (tested at 110 %, all heads, Drive 100: peak 0.32, finite).
 - **Interval**: main line + per-tap anti-aliased copies (4th-order low-pass at 0.45·fs/ratio for upward rates).
   Stable = two-grain delay-line shifter centred on the echo time; Reverse = backward grains (acquisition delay
   ≈ (1+ratio)·grain); Clock = fragments of 2·grain·(1+smear) read at the tap rate, so pitch and duration change
@@ -51,6 +58,22 @@ method's synthesis path: with no input or tail the output is numerically silent 
   low split, per-line slow LFO modulation (Motion up to 6 ms), 4 input + 4 long bloom all-passes and
   bloom-weighted injection favouring long lines (slower energy build-up). Measured: Wash onset energy far below the
   plate's (≈ −17 dB vs +10 dB early/late ratio), ≈ −9.6 dB per 2.5 s at 24 s decay.
+- **Hall** (new in 0.2): pre-delay, 12-tap stereo early-reflection pattern (4–84 ms × size, alternating signs,
+  some cross-feed, one smoothing all-pass), 4+4 input diffusers, then a ring of four sections (modulated all-pass →
+  delay → decay-consistent damping and 350 Hz bass split → all-pass → delay). Delay lengths are mutually incommensurate
+  (largest loop ≈ 0.94 s at Size 100 %, ≈ 0.1 s at 5 %); the first all-pass of each section wanders by up to 1.1 ms
+  with smoothed random plus a slow sine (the classic hall "random"/chorus idea), 7 output taps per channel from all
+  sections. Measured at 1 kHz: 0.6 s/size 10 → 0.56 s, 2.6 s/size 55 → 2.60 s, 6 s/size 100 → 6.2 s; echo density
+  0.9 reached in 45–95 ms.
+- **Shimmer** (new in 0.2, all reverbs): the reverb output is pitch-shifted (two-grain, 71/83 ms windows, sin² cross-
+  fade), band-limited 260 Hz – 8.5 kHz and fed back into the reverb input one chunk later, so every pass rises by the
+  interval (+12, +7, +19, +24 or −12). The feed is level-guarded (≤ −10 dBFS) and the band limits remove energy after a
+  few passes: at 100 % with a 4 s hall every interval decays to digital silence (tested).
+- **Decay-consistent damping** (0.2 fix, all reverbs): each feedback segment's damping low-pass is solved so that the
+  decay at the Tone frequency is a fixed fraction of the set decay (Plate and Hall ½, Wash 1/2.5) for any segment
+  length, Size or Decay (Jot-style absorbent filters). Before this, Wash's per-line low-pass ran on 30–150 ms lines,
+  so at the default 4.8 kHz Tone a 24 s Wash measured 15 s at 1 kHz and 4.8 s at 4 kHz, and Tone changed with Size.
+  Now: 6 s Wash measures 5.8 s (size 25) and 5.7 s (size 100) at 1 kHz.
 - **Freeze**: loop gains → RT60 10 000 s, damping open, input fades to Overdub, energy guard; tested over 60 s
   (bounded, finite; frozen silence stays silent). Delay freeze loops a crossfaded capture of the delay output.
 

@@ -32,5 +32,7 @@ if [[ -x "${RENDER}" ]]; then
 fi
 BENCH="${BUILD_DIR}/pa_bench"; [[ -x "${BENCH}" ]] || BENCH="${BUILD_DIR}/Release/pa_bench"
 [[ -x "${BENCH}" ]] && "${BENCH}" --seconds 20 > "${REPORT_DIR}/benchmark.txt" 2>&1 || true
+LAB="${BUILD_DIR}/pa_spacelab"; [[ -x "${LAB}" ]] || LAB="${BUILD_DIR}/Release/pa_spacelab"
+[[ -x "${LAB}" ]] && "${LAB}" > "${REPORT_DIR}/spacelab.txt" 2>&1 || true
 log "core tests exit ${core}, self-test exit ${selftest}"
 [[ ${core} -eq 0 && ${selftest} -eq 0 ]]

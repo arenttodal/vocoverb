@@ -261,3 +261,90 @@ TEST ("reverbs: plate and wash differ; freeze holds bounded energy; frozen silen
         CHECK (segPeak (zs.L, sr, 0.0, 10.0) < 1e-7);
     }
 }
+
+// ---------------------------------------------------------------------------------------------------- spaces v2
+namespace
+{
+/** T30 of a mono signal from Schroeder integration (fit -5..-35 dB). */
+double t30Of (const std::vector<float>& x, double sr, size_t start)
+{
+    std::vector<double> e (x.size(), 0.0);
+    double acc = 0.0;
+    for (size_t i = x.size(); i-- > start;) { acc += (double) x[i] * x[i]; e[i] = acc; }
+    auto lvl = [&] (size_t i) { return 10.0 * std::log10 (std::max (1e-30, e[i] / acc)); };
+    size_t a = start; while (a < x.size() && lvl (a) > -5.0) ++a;
+    size_t b = a; while (b < x.size() && lvl (b) > -35.0) ++b;
+    if (b >= x.size()) return -1.0;
+    return 2.0 * (double) (b - a) / sr; // 30 dB in (b - a) samples -> 60 dB
+}
+std::vector<float> band1k (const Buf& b, double sr)
+{
+    Biquad f1, f2; f1.bandpass (sr, 1000.0, 1.41); f2.bandpass (sr, 1000.0, 1.41);
+    std::vector<float> y (b.size());
+    for (size_t i = 0; i < b.size(); ++i) y[i] = f2.process (f1.process (0.5f * (b.L[i] + b.R[i])));
+    return y;
+}
+Buf impulseIn (double sec, double sr) { Buf in = silence (sec, sr); in.L[(size_t) (0.05 * sr)] = 0.5f; in.R[(size_t) (0.05 * sr)] = 0.5f; return in; }
+ParamSet spaceOnly (int reverbMode)
+{
+    ParamSet p = baseParams (1);
+    p[HarmEnable] = 0; p[Depth] = 0; p[ReverbMode] = (float) reverbMode; p[Mix] = 100;
+    return p;
+}
+} // namespace
+
+TEST ("spaces: Hall / Plate / Wash decay at 1 kHz follows the Decay knob (+-15 %), Wash tone independent of size")
+{
+    const double sr = 48000.0;
+    struct C { int mode; int decayId; float decay; int sizeId; float size; };
+    for (auto c : { C { 2, HaDecay, 0.6f, HaSize, 10 }, C { 2, HaDecay, 2.6f, HaSize, 55 }, C { 2, HaDecay, 6.0f, HaSize, 100 },
+                    C { 0, PlDecay, 3.0f, PlSize, 100 }, C { 1, WaDecay, 6.0f, WaSize, 25 }, C { 1, WaDecay, 6.0f, WaSize, 100 } })
+    {
+        ParamSet p = spaceOnly (c.mode);
+        p[c.decayId] = c.decay; p[c.sizeId] = c.size;
+        if (c.mode == 1) { p[WaLowRatio] = 1.0f; p[WaBloom] = 20; }
+        auto out = render (p, impulseIn (c.decay * 2.0 + 1.5, sr), {}, sr);
+        const double t = t30Of (band1k (out, sr), sr, (size_t) (0.05 * sr));
+        metric ("t30.mode" + std::to_string (c.mode) + ".set" + std::to_string (c.decay) + ".size" + std::to_string ((int) c.size), t, "s");
+        CHECK (t > c.decay * 0.85 && t < c.decay * 1.15);
+    }
+}
+
+TEST ("spaces: shimmer at 100 % (every interval) and Tape at 110 % feedback stay bounded; shimmer dies away")
+{
+    const double sr = 48000.0;
+    Buf in = noiseBurst (2.0, 30.0, sr, 0.8f, 5);
+    for (int sp = 0; sp < 5; ++sp)
+    {
+        ParamSet p = spaceOnly (2); p[HaDecay] = 4; p[Shimmer] = 100; p[ShimmerPitch] = (float) sp;
+        auto out = render (p, in, {}, sr);
+        CHECK (finite (out));
+        CHECK (segPeak (out.L, sr, 0.0, 30.0) < 2.0);
+        metric ("shimmer.pitch" + std::to_string (sp) + ".tailDb", db (segRms (out.L, sr, 28.0, 30.0)), "dB");
+        CHECK (segRms (out.L, sr, 28.0, 30.0) < 1.0e-4);
+    }
+    ParamSet p = spaceOnly (0); p[ReverbEnable] = 0; p[DelayEnable] = 1; p[DelayMode] = 2;
+    p[TpFeedback] = 110; p[TpHeads] = 6; p[TpDrive] = 100; p[TpTone] = 12000;
+    auto out = render (p, in, {}, sr);
+    CHECK (finite (out));
+    const double pk = segPeak (out.L, sr, 0.0, 30.0);
+    metric ("tape.runaway.peak", pk);
+    CHECK (pk < 1.5);
+    CHECK (segRms (out.L, sr, 25.0, 30.0) > 1.0e-3); // it really self-oscillates (bounded)
+}
+
+TEST ("tape: heads sound at 1x / 2x / 3x of Time; feedback 0 gives exactly the selected heads")
+{
+    const double sr = 48000.0;
+    ParamSet p = spaceOnly (0); p[ReverbEnable] = 0; p[DelayEnable] = 1; p[DelayMode] = 2;
+    p[TpTime] = 200; p[TpFeedback] = 0; p[TpWow] = 0; p[TpHeads] = 6; p[TpDrive] = 0; p[TpSpread] = 0;
+    auto out = render (p, impulseIn (1.2, sr), {}, sr);
+    auto energyAt = [&] (double t) { return segRms (out.L, sr, 0.05 + t - 0.01, 0.05 + t + 0.01); };
+    const double h1 = energyAt (0.2), h2 = energyAt (0.4), h3 = energyAt (0.6), gap = energyAt (0.3), after = energyAt (0.8);
+    metric ("tape.heads.h1", h1); metric ("tape.heads.h2", h2); metric ("tape.heads.h3", h3); metric ("tape.heads.gap", gap);
+    CHECK (h1 > 20 * gap && h2 > 20 * gap && h3 > 20 * gap);
+    CHECK (after < h3 * 0.05);
+    p[TpHeads] = 1; // head 2 only
+    auto o2 = render (p, impulseIn (1.2, sr), {}, sr);
+    CHECK (segRms (o2.L, sr, 0.24, 0.26) < 0.05 * segRms (o2.L, sr, 0.44, 0.46));
+}

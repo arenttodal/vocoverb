@@ -22,7 +22,7 @@ def main():
     os.makedirs(REP, exist_ok=True)
     out = []
     w = out.append
-    w("# Playable Ambience 0.1.0 — Validation Report")
+    w("# Playable Ambience 0.2.0 — Validation Report")
     w("")
     w(f"Generated {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')} on {a.platform} ({platform.machine()}).")
     w("Status words: **PASS** = executed and passed; **FAIL** = executed and failed; **NOT PERFORMED** = not run in this")

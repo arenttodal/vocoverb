@@ -3,7 +3,7 @@
 Tip: **Save Experiment** (standalone strip or Settings > Support) writes the preset, settings, recorded MIDI and
 diagnostics into a folder — attach it and you can skip most fields below.
 
-- Build version / Mac architecture: (Settings > Support, e.g. 0.1.0 arm64)
+- Build version / Mac architecture: (Settings > Support, e.g. 0.2.0 arm64)
 - Host: Standalone / Ableton Live x.y / Logic Pro x.y
 - Source: voice / instrument (which?) / file / demo (which?) — sample rate / buffer:
 - Preset (and A or B):

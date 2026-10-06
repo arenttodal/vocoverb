@@ -66,6 +66,7 @@ private:
     float yL1 = 0, yR1 = 0;
     float lastTone = -1, lastAge = -1;
     float envA = 0.01f, envRel = 0.001f, envRelSlow = 0.0005f;
+    bool primed = false; // first block after reset starts at the set time (no glide / crossfade from a stale value)
 };
 
 class IntervalDelay
@@ -110,6 +111,38 @@ private:
     AllpassDelay fbApL[2], fbApR[2], outApL[2], outApR[2];
     Rng rng { 4242u };
     int maxDelaySamples = 0;
+};
+
+/** Tape echo in the spirit of the classic multi-head machines: one tape loop, three playback heads at 1x/2x/3x of the
+    head-1 time, selectable head combinations, record saturation, wow and flutter that scale with head distance,
+    playback head bump and high-frequency loss, a motor glide on time changes and optional hiss. */
+class TapeDelay
+{
+public:
+    static constexpr int kHeads = 3;
+    void prepare (double sampleRate);
+    void reset() noexcept;
+    void beginClear() noexcept { resetSmallState(); clears.begin(); }
+    bool clearStep (int budget) noexcept { return clears.step (budget); }
+    void process (const SpaceContext& ctx, const float* inL, const float* inR, float* outL, float* outR, int n) noexcept;
+    float currentTimeMs() const noexcept { return timeMs; }
+    /** Head mask (bit k = head k+1) for a TpHeads choice. */
+    static int headMask (int choice) noexcept;
+
+private:
+    void resetSmallState() noexcept;
+    double sr = 48000.0;
+    DelayLine tape;
+    ClearList clears;
+    float timeMs = 320.0f, headMs = 320.0f;
+    Biquad bump[kHeads], loss[kHeads], loss2[kHeads];
+    DcBlocker hp;
+    Lfo wow, flutter;
+    Drift drift;
+    Rng hissRng { 31337u };
+    float env = 0.0f, hissEnv = 0.0f, fbState = 0.0f;
+    float lastTone = -1.0f;
+    bool primed = false; // first block after reset jumps to the set time (no glide from a stale value)
 };
 
 /** Records the recent wet output of an engine; on freeze, loops a bounded region with crossfaded boundaries. */

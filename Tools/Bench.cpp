@@ -52,6 +52,9 @@ int main (int argc, char** argv)
         { "Plate + Classic (24 bands, Eco), 6 voices", [] (ParamSet& p) { base (p); p[DelayEnable] = 0; p[ReverbMode] = 0; p[HarmMethod] = 1; p[ClBands] = 0; p[Quality] = 0; } },
         { "Interval Clock/Reverse 3 taps + Wash + Classic 48", [] (ParamSet& p) { base (p); p[DelayMode] = 1; p[IvPitchMode] = 1; p[IvDirection] = 2; p[ReverbMode] = 1; p[HarmMethod] = 1; p[ClBands] = 2; } },
         { "Worst case: BBD+Wash parallel, 2x Classic 48 High, 6 voices", [] (ParamSet& p) { base (p); p[ReverbMode] = 1; p[HarmMethod] = 1; p[ClBands] = 2; p[Quality] = 2; p[Routing] = 0; } },
+        { "Hall + Shimmer + Classic (32 bands), 3 voices", [] (ParamSet& p) { base (p); p[DelayEnable] = 0; p[ReverbMode] = 2; p[Shimmer] = 50; p[HarmMethod] = 1; } },
+        { "Tape (3 heads) + Hall, harmony off", [] (ParamSet& p) { base (p); p[DelayMode] = 2; p[TpHeads] = 6; p[ReverbMode] = 2; p[HarmEnable] = 0; } },
+        { "Worst case: Tape 3 heads + Wash + Shimmer, 2x Classic 48 High, 6 voices", [] (ParamSet& p) { base (p); p[DelayMode] = 2; p[TpHeads] = 6; p[ReverbMode] = 1; p[Shimmer] = 100; p[HarmMethod] = 1; p[ClBands] = 2; p[Quality] = 2; } },
         { "Worst case: Interval Stable 3 taps + Wash, 2x Classic 48, 6 voices", [] (ParamSet& p) { base (p); p[DelayMode] = 1; p[ReverbMode] = 1; p[HarmMethod] = 1; p[ClBands] = 2; p[Quality] = 2; } },
     };
     std::vector<float> fl, fr;

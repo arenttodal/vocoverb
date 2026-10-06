@@ -58,12 +58,15 @@ Evidence: `design/visual-validation/`.
 |---|---|
 | Header | preset browser, prev / next, favourite, load, save, A/B, IN/OUT meters, `mix` (DRY / WET), gear |
 | Card headers | `delayEnable`, `reverbEnable`, `harmEnable` (dots); `delayMode`, `reverbMode` (dropdowns); chord badge; `noteSource`; `noNotePolicy` (pictograms) |
-| Delay macros | BBD: `bbdTime` / `bbdDiv` (by sync), `bbdFeedback`, `bbdTone`, `bbdAge`, `bbdLevel`; Interval: `ivTime` / `ivDiv`, `ivFeedback`, `ivTap2Semi` (INTERVAL), `ivSmear`, `ivLevel` |
+| Delay macros | BBD: `bbdTime` / `bbdDiv` (by sync), `bbdFeedback`, `bbdTone`, `bbdAge`, `bbdLevel`; Interval: `ivTime` / `ivDiv`, `ivFeedback`, `ivTap2Semi` (INTERVAL), `ivSmear`, `ivLevel`; Tape: `tpTime` / `tpDiv`, `tpFeedback`, `tpTone`, `tpDrive`, `tpLevel` |
+| Delay settings, Tape | `tpSync` (heading), `tpHeads`, `tpWow`, `tpSpread`, `tpHiss`, `clearTailOnChange` |
 | Delay settings, BBD | `bbdSync` (heading), `bbdMotion`, `bbdStereo`, `bbdRate`, `bbdTimeMode`, `bbdNoise`, `clearTailOnChange` |
 | Delay settings, Interval | heading `ivSync`; TAPS `ivTap1Semi`, `ivTap3Semi`, `ivTap1..3Level`, `ivTap1..3Pan` (tap 2 interval = INTERVAL macro); PITCH `ivPitchMode`, `ivDirection`, `ivShiftPlace`, `ivGrain`, `ivDriver`, `ivRef`; CHARACTER `ivTaps`, `ivTone`, `clearTailOnChange` |
-| Reverb macros | Plate: `plDecay`, `plPredelay`, `plTone`, `plMotion`, `plLevel`; Wash: `waDecay`, `waBloom`, `waTone`, `waMotion`, `waLevel` |
-| Reverb settings, Plate | `width`, `plSize`, `plDiffusion`, `plLowRatio`, `plRate`, `clearTailOnChange` |
-| Reverb settings, Wash | `width`, `waSize`, `waLowRatio`, `waRate`, `clearTailOnChange` |
+| Reverb macros | Plate: `plDecay`, `plPredelay`, `plTone`, `plMotion`, `plLevel`; Wash: `waDecay`, `waBloom`, `waTone`, `waMotion`, `waLevel`; Hall: `haDecay`, `haPredelay`, `haSize`, `haTone`, `haLevel` |
+| Reverb settings, Plate | `plSize`, `plDiffusion`, `plLowRatio`, `plRate` |
+| Reverb settings, Wash | `waSize`, `waLowRatio`, `waRate` |
+| Reverb settings, Hall | `haEarly`, `haDiffusion`, `haLowRatio`, `haMotion`, `haRate` |
+| Reverb settings, SHIMMER page (every reverb) | `shimmer`, `shimmerPitch`, `width`, `clearTailOnChange` |
 | Routing strip | `routing`, `placement` |
 | Harmony macros | `depth`, `colour`, `transition`, `duckAmount` |
 | Harmony settings, source page | Chord: `chRoot`, `chQuality`, `chOctave`, `chInversion`, `chSpread`, snapshots 1–8 + STORE; Intervals: `intRoot`, `intRefSource`, `intMode`, `intCount`, `intKey`, `intScale`, `int1..6`; Arp: `arpMode`, `arpSync`, `arpRate` / `arpFreeRate` (by sync), `arpOctaves`, `arpGate`, `arpSwing`, `arpVelVar`; MIDI: `chordWindow`, `pitchBendRange`, `modWheelTarget`, live MIDI status |
@@ -144,3 +147,13 @@ Evidence: `design/visual-validation/`.
 - Topology switches (routing / placement) now also fade the signal entering the spaces and reset the harmony
   envelopes at the swap; previously a discontinuity could be recorded into a delay tail and replay one repeat later
   (found because the old click test had masked it with the FFT method).
+
+## 0.2.0: new modes and compatibility
+- `delayMode` gained **Tape** (index 2) and `reverbMode` gained **Hall** (index 2); all new parameters (`ha*`, `tp*`,
+  `shimmer`, `shimmerPitch`) are appended at the end of the table, so no existing id moves. Sessions, presets and
+  A/B slots store plain values by id, so every 0.1 session loads unchanged (BBD/Interval, Plate/Wash keep their
+  indices; missing new values take their defaults: shimmer 0 %). One caveat: a host automation lane recorded on
+  `delayMode` / `reverbMode` in 0.1 stores normalised values, and with three choices instead of two, a recorded
+  "Wash" / "Interval" (normalised 1.0) now plays back as Hall / Tape. Re-record such lanes.
+- Reverb Tone is now decay-consistent (see `docs/DSP.md`): sessions using Wash sound brighter and slightly longer than
+  in 0.1 at the same Tone value (closer to the Decay knob); Plate at its default Tone is unchanged.

@@ -52,14 +52,15 @@ public:
     static constexpr int kChunk = VoiceBank::kChunk;
 
 private:
+    static constexpr int kModes = 3; // per stage: BBD / Interval / Tape and Plate / Wash / Hall
     struct Stage
     {
         int active = 0;
-        float gain[2] { 0, 0 };
-        int state[2] { 0, 0 };  // 0 idle, 1 active, 2 retiring, 3 clearing
+        float gain[kModes] {};
+        int state[kModes] {};   // 0 idle, 1 active, 2 retiring, 3 clearing
         float inputGain = 1.0f;
-        float level[2] { 1, 1 };
-        float enable() const noexcept { return std::min (1.0f, gain[0] + gain[1]); }
+        float level[kModes] { 1, 1, 1 };
+        float enable() const noexcept { float s = 0.0f; for (float g : gain) s += g; return std::min (1.0f, s); }
     };
     void handleEvent (const MidiEvent& e) noexcept;
     void updateNotes (bool force) noexcept;
@@ -90,9 +91,13 @@ private:
 
     BbdDelay bbd;
     IntervalDelay ivd;
+    TapeDelay tpd;
     CaptureLooper delayLooper;
     PlateReverb plate;
     WashReverb wash;
+    HallReverb hall;
+    ShimmerUnit shimmer;
+    float shimL[kChunk] {}, shimR[kChunk] {}, revInL[kChunk] {}, revInR[kChunk] {};
     Stage dStage, rStage;
     HarmonyUnit hA, hB;
 

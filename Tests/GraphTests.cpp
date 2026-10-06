@@ -273,7 +273,11 @@ TEST ("graph: stability stress - extremes, automation sweeps, freeze toggles, 60
     auto out = render (p, in, ev, kSr, 512, [] (double t, ParamSet& q) {
         const int k = (int) (t / 2.5);
         q[HarmMethod] = (float) (1 + k % 4);
-        q[DelayMode] = (float) (k % 2); q[ReverbMode] = (float) ((k / 2) % 2);
+        q[DelayMode] = (float) (k % 3); q[ReverbMode] = (float) ((k / 2) % 3);
+        q[Shimmer] = (k % 4) == 1 ? 100.0f : 0.0f; q[ShimmerPitch] = (float) (k % 5);
+        q[TpFeedback] = 110.0f; q[TpHeads] = (float) (k % 7); q[TpDrive] = (float) (k % 2) * 100.0f;
+        q[TpTime] = 40.0f + 960.0f * (float) (0.5 + 0.5 * std::sin (t * 0.8));
+        q[HaSize] = 5.0f + 95.0f * (float) (0.5 + 0.5 * std::sin (t * 0.6)); q[HaDecay] = 20.0f;
         q[PlSize] = 50.0f + 100.0f * (float) (0.5 + 0.5 * std::sin (t * 1.3));
         q[WaSize] = 25.0f + 175.0f * (float) (0.5 + 0.5 * std::sin (t * 0.7));
         q[BbdTime] = 30.0f + 1970.0f * (float) (0.5 + 0.5 * std::sin (t * 0.9));
@@ -367,7 +371,8 @@ TEST ("graph: real-time path performs no heap allocation (all modes, events, swi
     for (int b = 0; b < 2000; ++b)
     {
         const int k = b / 40;
-        p[HarmMethod] = (float) (k % 5); p[DelayMode] = (float) (k % 2); p[ReverbMode] = (float) ((k / 2) % 2);
+        p[HarmMethod] = (float) (k % 5); p[DelayMode] = (float) (k % 3); p[ReverbMode] = (float) ((k / 2) % 3);
+        p[Shimmer] = (k % 3) == 0 ? 60.0f : 0.0f; p[TpHeads] = (float) (k % 7);
         p[Routing] = (float) ((k / 3) % 3); p[Placement] = (float) ((k / 4) % 2); p[NoteSource] = (float) ((k / 5) % 4);
         p[Freeze] = (k % 7) > 4 ? 1.0f : 0.0f; p[Quality] = (float) ((k / 9) % 3); p[Timing] = (float) ((k / 6) % 2);
         p[IvPitchMode] = (float) ((k / 2) % 2); p[IvDirection] = (float) (k % 3);

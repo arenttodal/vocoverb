@@ -32,6 +32,7 @@ void BbdDelay::resetSmallState() noexcept
     yL1 = yR1 = 0.0f;
     xfading = false; xfade = 1.0f;
     lastTone = -1.0f;
+    primed = false;
 }
 
 void BbdDelay::reset() noexcept
@@ -46,6 +47,7 @@ void BbdDelay::process (const SpaceContext& ctx, const float* inL, const float* 
     const ParamSet& p = *ctx.p;
     float target = p.b (BbdSync) ? (float) syncedMs (p.i (BbdDiv), ctx.bpm) : p[BbdTime];
     target = clampf (target, 30.0f, 2000.0f);
+    if (! primed) { headA = headB = target; primed = true; }
     const float fb = p[BbdFeedback] / 100.0f;
     const float age = p[BbdAge] / 100.0f;
     const float motion = clampf (p[BbdMotion] / 100.0f + ctx.motionMod, 0.0f, 1.0f);
@@ -253,6 +255,7 @@ void IntervalDelay::process (const SpaceContext& ctx, const float* inL, const fl
             }
         }
     }
+    if (written == 0) timeSmoothed = target; // fresh start: no glide from a stale time
     const float ratioCoef = onePoleCoef (0.03f, sr);
     const float timeCoef = onePoleCoef (0.12f, sr);
     const float idCoef = onePoleCoef (0.02f, sr);
@@ -465,5 +468,119 @@ void CaptureLooper::process (bool freeze, float loopSeconds, const float* inL, c
             outR[i] = inR[i];
         }
     }
+}
+} // namespace pa
+
+// ============================================================================ Tape
+namespace pa
+{
+int TapeDelay::headMask (int choice) noexcept
+{
+    static const int masks[7] = { 1, 2, 4, 3, 6, 5, 7 }; // 1 | 2 | 3 | 1+2 | 2+3 | 1+3 | 1+2+3
+    return masks[std::clamp (choice, 0, 6)];
+}
+
+void TapeDelay::prepare (double sampleRate)
+{
+    sr = sampleRate;
+    tape.allocate ((int) std::ceil (3.3 * sr) + 64);
+    clears.count = 0;
+    clears.add (tape);
+    hp.setCutoff (sr, 70.0);
+    drift.set (0.21, sr);
+    reset();
+}
+
+void TapeDelay::resetSmallState() noexcept
+{
+    for (int k = 0; k < kHeads; ++k) { bump[k].reset(); loss[k].reset(); loss2[k].reset(); }
+    hp.reset();
+    env = hissEnv = fbState = 0.0f;
+    lastTone = -1.0f;
+    primed = false;
+}
+
+void TapeDelay::reset() noexcept
+{
+    tape.clear();
+    resetSmallState();
+    wow.phase = 0.0; flutter.phase = 0.41;
+}
+
+void TapeDelay::process (const SpaceContext& ctx, const float* inL, const float* inR, float* outL, float* outR, int n) noexcept
+{
+    const ParamSet& p = *ctx.p;
+    float target = p.b (TpSync) ? (float) syncedMs (p.i (TpDiv), ctx.bpm) : p[TpTime];
+    target = clampf (target, 20.0f, 1000.0f); // head 3 = 3x stays inside the 3.3 s loop
+    if (! primed) { headMs = target; primed = true; }
+    const float fb = p[TpFeedback] / 100.0f;
+    const int mask = headMask (p.i (TpHeads));
+    const float drive = p[TpDrive] / 100.0f;
+    const float wf = clampf (p[TpWow] / 100.0f + ctx.motionMod, 0.0f, 1.0f);
+    const float spread = p[TpSpread] / 100.0f;
+    const float hiss = p[TpHiss] / 100.0f;
+    const float tone = p[TpTone];
+    if (tone != lastTone)
+    {
+        lastTone = tone;
+        for (int k = 0; k < kHeads; ++k)
+        {
+            bump[k].lowShelf (sr, 110.0, 2.0);            // playback head bump
+            loss[k].lowpass (sr, tone, 0.62);             // gap / spacing loss
+            loss2[k].lowpass (sr, std::min (16000.0, tone * 2.2), 0.7);
+        }
+    }
+    wow.setRate (0.55 + 0.25 * wf, sr);
+    flutter.setRate (7.3, sr);
+
+    int active[kHeads], na = 0;
+    for (int k = 0; k < kHeads; ++k) if (mask & (1 << k)) active[na++] = k;
+    float gl[kHeads] {}, gr[kHeads] {};
+    for (int a = 0; a < na; ++a)
+    {
+        float pos = na == 1 ? 0.0f : (na == 2 ? (a == 0 ? -1.0f : 1.0f) : (float) (a - 1));
+        panGains (pos * spread * 0.8f, gl[active[a]], gr[active[a]]);
+    }
+    // feedback normalised by the number of heads, so the same Feedback setting rings similarly in every combination
+    const float fbPerHead = fb / std::sqrt ((float) std::max (1, na));
+    // unity small-signal gain (the loop gain is set by Feedback alone); Drive only adds compression and harmonics
+    const float bias = 0.08f * drive, inDrive = 1.0f + drive * 3.5f;
+    const float tb = fastTanh (bias), makeUp = 1.0f / (inDrive * std::max (0.2f, 1.0f - tb * tb));
+    const float glide = onePoleCoef (0.32f, sr); // motor speed change: the pitch bends towards the new time
+    const float ms = 0.001f * (float) sr;
+    const float envA = onePoleCoef (0.01f, sr), envR = onePoleCoef (2.5f, sr);
+    const int maxD = tape.maxDelay() - 8;
+
+    for (int i = 0; i < n; ++i)
+    {
+        headMs += glide * (target - headMs);
+        // speed wobble is a fraction of the tape speed: the excursion grows with the head distance
+        const float speedDev = wf * (0.0042f * wow.next() + 0.0009f * flutter.next() + 0.0021f * drift.next());
+        float sumL = 0.0f, sumR = 0.0f, fbSum = 0.0f;
+        for (int a = 0; a < na; ++a)
+        {
+            const int k = active[a];
+            const float d = clampf (headMs * (float) (k + 1) * (1.0f + speedDev) * ms, 2.0f, (float) maxD);
+            float y = tape.readCubic (d);
+            y = loss2[k].process (loss[k].process (bump[k].process (y)));
+            fbSum += y;
+            sumL += y * gl[k]; sumR += y * gr[k];
+        }
+        outL[i] = sumL;
+        outR[i] = sumR;
+
+        const float x = 0.5f * (inL[i] + inR[i]);
+        env += (std::abs (x) > env ? envA : envR) * (std::abs (x) - env);
+        float w = x + hp.process (fbSum) * fbPerHead;
+        // record amplifier + tape: soft saturation with a slight asymmetry (even harmonics), level-compensated
+        w = (fastTanh (w * inDrive + bias) - tb) * makeUp;
+        if (hiss > 0.0f)
+        {
+            hissEnv += 0.0005f * (std::min (1.0f, env * 8.0f) - hissEnv);
+            w += hissRng.bi() * hiss * hissEnv * 0.006f;
+        }
+        tape.push (w);
+    }
+    timeMs = headMs;
 }
 } // namespace pa

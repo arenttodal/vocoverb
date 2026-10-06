@@ -1,4 +1,4 @@
-# Playable Ambience 0.1.0 — Quick Start
+# Playable Ambience 0.2.0 — Quick Start
 
 Play the harmony of the ambience while your original audio stays untouched. Sing or play a phrase, stop, then
 change the chord of the remaining tail with the keys.
@@ -29,6 +29,10 @@ change the chord of the remaining tail with the keys.
 - **DRY / WET** (top right) blends the untouched source against the ambience: 50 % keeps both at full level,
   0 % = dry only, 100 % = wet only. The ambience output level and the dry level are in the gear: **Settings > Audio**.
 - Compare **AFTER SPACE** (the existing tail follows new chords) and **BEFORE SPACE** (chords are imprinted, then echo).
+- New in 0.2: **Tape** in the Delay dropdown (three-head tape echo: pick the heads in Delay settings; push Feedback past
+  100 % for bounded runaway), **Hall** in the Reverb dropdown (Size goes from a small room to a large hall) and
+  **Shimmer** in Reverb settings > SHIMMER (works with Plate, Wash and Hall). Start from the new factory categories
+  **Vocal**, **Guitar**, **Keys**, **Drums**, **Ambient** and **Mix** (harmony off) or the Showcase presets.
 - Compare the routing pictograms (**parallel**, **D → R**, **R → D**) and the BBD/Interval and Plate/Wash dropdowns.
 - The displays show the last few seconds since a phrase started (0 s = the onset); when everything is silent they
   show a dim preview of the current delay pattern and decay.

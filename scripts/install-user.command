@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Playable Ambience 0.1.0 per-user installer. Installs ONLY this product; no sudo; existing copies of this same
+# Playable Ambience 0.2.0 per-user installer. Installs ONLY this product; no sudo; existing copies of this same
 # product are moved to a timestamped backup; other vendors' plugins and your presets are never touched.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"

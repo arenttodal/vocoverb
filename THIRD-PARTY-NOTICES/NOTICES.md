@@ -1,4 +1,4 @@
-# Third-party notices — Playable Ambience 0.1.0 (evaluation build)
+# Third-party notices — Playable Ambience 0.2.0 (evaluation build)
 
 | Component | Version / revision | Licence | Use |
 |---|---|---|---|

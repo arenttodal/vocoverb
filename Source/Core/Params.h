@@ -42,8 +42,8 @@ struct ParamInfo
  X(ClearTailOnChange, "clearTailOnChange", "Clear Tail on Change", Bool, 0, 1, 0, 0, "", "", "Mix", "When on, switching engine modes cuts the old tail quickly (exact comparisons). When off, the old tail rings out.") \
  X(DelayEnable, "delayEnable", "Delay Enable", Bool, 0, 1, 1, 0, "", "", "Delay", "Turns the delay engine on or off (processing, not just display).") \
  X(ReverbEnable, "reverbEnable", "Reverb Enable", Bool, 0, 1, 1, 0, "", "", "Reverb", "Turns the reverb engine on or off (processing, not just display).") \
- X(DelayMode, "delayMode", "Delay Mode", Choice, 0, 1, 0, 0, "", "BBD|Interval", "Delay", "BBD: warm darkening echoes. Interval: pitch-shaped taps.") \
- X(ReverbMode, "reverbMode", "Reverb Mode", Choice, 0, 1, 1, 0, "", "Plate|Wash", "Reverb", "Plate: dense, immediate. Wash: slow bloom, very long modulated tail.") \
+ X(DelayMode, "delayMode", "Delay Mode", Choice, 0, 2, 0, 0, "", "BBD|Interval|Tape", "Delay", "BBD: warm darkening echoes. Interval: pitch-shaped taps. Tape: three-head tape echo.") \
+ X(ReverbMode, "reverbMode", "Reverb Mode", Choice, 0, 2, 1, 0, "", "Plate|Wash|Hall", "Reverb", "Plate: dense, immediate. Wash: slow bloom, very long modulated tail. Hall: rooms to large halls with early reflections.") \
  X(Width, "width", "Width", Float, 0, 150, 100, 0, "%", "", "Mix", "Wet stereo width (mid/side). 0% = mono wet; mono fold-down stays intact.") \
  X(WetLowCut, "wetLowCut", "Wet Low Cut", Float, 20, 1000, 100, 150, "Hz", "", "Mix", "High-pass on the wet branch only.") \
  X(WetHighCut, "wetHighCut", "Wet High Cut", Float, 1000, 20000, 12000, 5000, "Hz", "", "Mix", "Low-pass on the wet branch only.") \
@@ -177,7 +177,30 @@ struct ParamInfo
  X(WaRate, "waRate", "Wash Motion Rate", Float, 0.005f, 1, 0.1f, 0.1f, "Hz", "", "Reverb", "Modulation rate.") \
  X(WaLevel, "waLevel", "Wash Level", Float, -60, 6, -6, -12, "dB", "", "Reverb", "Wash wet level.") \
  X(HarmEnable, "harmEnable", "Harmony Enable", Bool, 0, 1, 1, 0, "", "", "Harmony", "Turns the Classic harmony on or off. Off = ordinary ambience (the settings are kept).") \
- X(Mix, "mix", "Dry/Wet", Float, 0, 100, 50, 0, "%", "", "Mix", "Overall dry/wet blend. 50% = dry and wet both at their full levels; towards 0% the wet fades out (0% = dry only), towards 100% the dry fades out (100% = wet only).")
+ X(Mix, "mix", "Dry/Wet", Float, 0, 100, 50, 0, "%", "", "Mix", "Overall dry/wet blend. 50% = dry and wet both at their full levels; towards 0% the wet fades out (0% = dry only), towards 100% the dry fades out (100% = wet only).") \
+ X(HaDecay, "haDecay", "Hall Decay", Float, 0.2f, 20, 2.6f, 2.5f, "s", "", "Reverb", "Approximate broadband RT60 of the hall.") \
+ X(HaPredelay, "haPredelay", "Hall Pre-delay", Float, 0, 250, 18, 50, "ms", "", "Reverb", "Gap before the early reflections and the tail.") \
+ X(HaSize, "haSize", "Hall Size", Float, 5, 100, 55, 0, "%", "", "Reverb", "Small room (low) to large hall (high): scales reflections and the tank (smoothly).") \
+ X(HaTone, "haTone", "Hall Tone", Float, 1000, 20000, 7000, 5000, "Hz", "", "Reverb", "High-frequency damping: the decay at this frequency is half the set decay.") \
+ X(HaEarly, "haEarly", "Hall Early Reflections", Float, 0, 100, 35, 0, "%", "", "Reverb", "Level of the early-reflection pattern (the room's first walls).") \
+ X(HaDiffusion, "haDiffusion", "Hall Diffusion", Float, 0, 100, 70, 0, "%", "", "Reverb", "How quickly the tail becomes dense.") \
+ X(HaLowRatio, "haLowRatio", "Hall Bass Multiplier", Float, 0.5f, 2.0f, 1.15f, 0, "x", "", "Reverb", "Low-frequency decay relative to the main decay (crossover about 350 Hz).") \
+ X(HaMotion, "haMotion", "Hall Motion", Float, 0, 100, 25, 0, "%", "", "Reverb", "Random 'wander' of the tank delays: removes metallic ringing, adds gentle chorus.") \
+ X(HaRate, "haRate", "Hall Motion Rate", Float, 0.05f, 3, 0.7f, 0.5f, "Hz", "", "Reverb", "Speed of the wander.") \
+ X(HaLevel, "haLevel", "Hall Level", Float, -60, 6, -6, -12, "dB", "", "Reverb", "Hall wet level.") \
+ X(Shimmer, "shimmer", "Shimmer", Float, 0, 100, 0, 0, "%", "", "Reverb", "Pitch-shifted feedback into the reverb: each pass rises by the shimmer interval (octave-up shimmer).") \
+ X(ShimmerPitch, "shimmerPitch", "Shimmer Interval", Choice, 0, 4, 0, 0, "", "+12|+7|+19|+24|-12", "Reverb", "Interval of each shimmer pass, in semitones.") \
+ X(TpTime, "tpTime", "Tape Time", Float, 40, 1000, 320, 300, "ms", "", "Delay", "Head 1 echo time when not synced; heads 2 and 3 are at 2x and 3x.") \
+ X(TpSync, "tpSync", "Tape Sync", Bool, 0, 1, 0, 0, "", "", "Delay", "Locks head 1 to a tempo division (heads 2 and 3 follow at 2x and 3x).") \
+ X(TpDiv, "tpDiv", "Tape Division", Choice, 0, 14, 5, 0, "", PA_DIVS, "Delay", "Synced head 1 time.") \
+ X(TpFeedback, "tpFeedback", "Tape Feedback", Float, 0, 110, 45, 0, "%", "", "Delay", "Repeat intensity. Above about 100% the tape runs away into bounded self-oscillation.") \
+ X(TpHeads, "tpHeads", "Tape Heads", Choice, 0, 6, 5, 0, "", "1|2|3|1+2|2+3|1+3|1+2+3", "Delay", "Which playback heads sound (and feed back): head 1 = Time, head 2 = 2x, head 3 = 3x.") \
+ X(TpTone, "tpTone", "Tape Tone", Float, 1000, 12000, 4200, 4000, "Hz", "", "Delay", "Tape high-frequency loss: each repeat gets darker.") \
+ X(TpDrive, "tpDrive", "Tape Drive", Float, 0, 100, 35, 0, "%", "", "Delay", "Record level into the tape: warmth, compression and saturation.") \
+ X(TpWow, "tpWow", "Tape Wow & Flutter", Float, 0, 100, 25, 0, "%", "", "Delay", "Motor and capstan speed wobble (pitch drift of the repeats).") \
+ X(TpSpread, "tpSpread", "Tape Spread", Float, 0, 100, 60, 0, "%", "", "Delay", "Places the active heads across the stereo field.") \
+ X(TpHiss, "tpHiss", "Tape Hiss", Float, 0, 100, 0, 0, "%", "", "Delay", "Tape noise while the tape carries sound (fades out a few seconds after the input stops).") \
+ X(TpLevel, "tpLevel", "Tape Level", Float, -60, 6, -8, -12, "dB", "", "Delay", "Tape wet level.")
 
 enum ParamId : int
 {

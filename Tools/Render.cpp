@@ -155,9 +155,14 @@ int main (int argc, char** argv)
         { "13-clock-fragments.wav", "Clock Fragments", "Clock mode: rate couples pitch and fragment duration.", Fixture::PluckedSequence, -1, 9.0, {} },
         { "14-reverse-bloom.wav", "Reverse Bloom", "Reverse interval fragments into a blooming Wash.", Fixture::BowedTexture, -1, 10.0, {} },
         { "15-arpeggiated-air.wav", "Arpeggiated Air", "Arpeggiator (free 120 BPM grid) over a sustained wash; held C minor 7.", Fixture::BowedTexture, held, 9.0, {} },
+        { "16-space-echo-dub.wav", "Space Echo Dub", "Tape heads 1+3 with saturation and wow into a modest hall (harmony off).", Fixture::PluckedSequence, -1, 10.0, {} },
+        { "17-drum-room.wav", "Drum Room", "Small reflective room (Hall at size 10, 0.6 s) on a drum pulse.", Fixture::DrumPulse, -1, 8.0, {} },
+        { "18-concert-hall.wav", "Concert Hall", "Large natural hall, 2.8 s, clear early reflections (harmony off).", Fixture::HarmonicTone, -1, 10.0, {} },
+        { "19-shimmer-cathedral.wav", "Shimmer Cathedral", "Octave-up shimmer on a 9 s hall: the tail rises in octaves.", Fixture::BowedTexture, -1, 14.0, {} },
+        { "20-shimmer-choir.wav", "Shimmer Choir", "Shimmer hall vocoded to a stored Cmaj7 (Classic, After Space).", Fixture::HarmonicTone, -1, 12.0, {} },
     };
     std::ostringstream man;
-    man << "# Audio examples (Playable Ambience 0.1.0)\n\nRendered offline by `pa_render` with the shipping DSP engine at " << (int) sr
+    man << "# Audio examples (Playable Ambience 0.2.0)\n\nRendered offline by `pa_render` with the shipping DSP engine at " << (int) sr
         << " Hz, 16-bit stereo. Sources are clearly synthetic fixtures (no recordings). Timing policy Live (dry immediate).\n"
            "Levels are not loudness-matched unless the preset says so; compare by ear, then use A/B loudness match in the app.\n\n"
            "| File | Preset | What to listen for | Level |\n|---|---|---|---|\n";

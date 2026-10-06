@@ -3,7 +3,7 @@
 Play the harmony of the ambience while the original voice or instrument stays untouched. Sing a phrase, stop, and
 change the chord of the remaining tail with MIDI or the on-screen keys.
 
-Products (version 0.1.0, local evaluation builds):
+Products (version 0.2.0, local evaluation builds):
 
 | Product | Type | Notes |
 |---|---|---|
@@ -15,8 +15,8 @@ Products (version 0.1.0, local evaluation builds):
 ## Coverage
 | Area | Implementations |
 |---|---|
-| Delay | BBD character (smooth/tape time changes, age, wow/flutter, stereo/ping-pong/mono-spread); Interval (Stable and Clock, forward/reverse/alternating, output or bounded feedback cascade, up to 3 taps) |
-| Reverb | Plate (Dattorro-topology tank); Wash (16-line modulated FDN, bloom); freeze for both |
+| Delay | BBD character (smooth/tape time changes, age, wow/flutter, stereo/ping-pong/mono-spread); Interval (Stable and Clock, forward/reverse/alternating, output or bounded feedback cascade, up to 3 taps); Tape (three heads at 1x/2x/3x, seven head combinations, saturation, wow & flutter, bounded runaway above 100 % feedback) |
+| Reverb | Plate (Dattorro-topology tank); Wash (16-line modulated FDN, bloom); Hall (rooms to large halls: early reflections, random-modulated ring tank, bass multiplier); Shimmer for every reverb (+12/+7/+19/+24/−12); freeze for all |
 | Harmony | Classic filter-bank vocoder (24/32/48 bands) with on/off. Since the GUI v2 revision the build is Classic-only: saved FFT/Resonator/Shift states load as Classic (see `docs/GUI-Implementation-Note.md`) |
 | Placement / routing | After Space / Before Space; Parallel, Delay → Reverb, Reverb → Delay |
 | Notes | MIDI + on-screen keys, stored chord (8 snapshots), interval bank (chromatic/scale), arpeggiator |

@@ -172,6 +172,24 @@ struct OnePoleLP
     float a = 1.0f, z = 0.0f;
     void setCutoff (double sr, double f) noexcept { a = 1.0f - (float) std::exp (-2.0 * kPiD * std::clamp (f, 1.0, sr * 0.49) / sr); }
     void setOpen() noexcept { a = 1.0f; }
+    /** Decay-consistent damping for a feedback segment of `segSamples`: unity at DC, and at `toneHz` an extra loss of
+        `extra` times the segment's broadband loss for `t60` seconds. The decay at toneHz is then t60 / (1 + extra) for
+        every segment length (Jot-style absorbent filter), so Tone no longer depends on the line lengths, Size or
+        Decay. Opens fully when the required loss is negligible. */
+    void setDecayDamping (double sr, double toneHz, double segSamples, double t60, double extra) noexcept
+    {
+        const double w = 2.0 * kPiD * std::clamp (toneHz, 20.0, sr * 0.45) / sr;
+        const double T = std::pow (10.0, -3.0 * extra * segSamples / (sr * std::max (0.05, t60)));
+        if (T > 0.99999) { a = 1.0f; return; }
+        // |a / (1 - r e^-jw)| = T with a = 1 - r  ->  (T^2 - 1) r^2 + (2 - 2 T^2 cos w) r + (T^2 - 1) = 0
+        const double A = T * T - 1.0, B = 2.0 - 2.0 * T * T * std::cos (w);
+        const double disc = B * B - 4.0 * A * A;
+        if (disc < 0.0) { a = 1.0f; return; }
+        double r = (-B + std::sqrt (disc)) / (2.0 * A);
+        if (r < 0.0 || r >= 1.0) r = (-B - std::sqrt (disc)) / (2.0 * A);
+        r = std::clamp (r, 0.0, 0.9995);
+        a = (float) (1.0 - r);
+    }
     inline float process (float x) noexcept { z += a * (x - z); return z; }
     void reset() noexcept { z = 0; }
 };

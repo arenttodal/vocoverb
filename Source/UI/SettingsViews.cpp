@@ -260,15 +260,26 @@ void EffectDetail::rebuild()
 
     if (effect == Effect::Delay)
     {
-        const bool interval = P.value (DelayMode) > 0.5f;
-        title = interval ? "INTERVAL SETTINGS" : "BBD SETTINGS";
+        const int dm = juce::jlimit (0, 2, (int) P.value (DelayMode));
+        const bool interval = dm == 1;
+        title = dm == 2 ? "TAPE SETTINGS" : (interval ? "INTERVAL SETTINGS" : "BBD SETTINGS");
         // SYNC stays reachable while the graph (which carries the SYNC button) is hidden
-        auto sync = std::make_unique<ParamToggleButton> (P, interval ? IvSync : BbdSync, "SYNC");
+        auto sync = std::make_unique<ParamToggleButton> (P, dm == 2 ? TpSync : (interval ? IvSync : BbdSync), "SYNC");
         sync->getProperties().set ("capPx", 8.4f);
         sync->getProperties().set ("radius", 5.0f);
         sync->setTooltip ("Sync the delay time to the tempo; the Time knob then sets the division");
         headingExtra = std::move (sync);
-        if (! interval)
+        if (dm == 2)
+        {
+            Page pg { "TAPE", 2, {} };
+            add (pg, TpHeads, "Heads", "Which playback heads sound and feed back: head 1 = Time, head 2 = 2x, head 3 = 3x.", DetailControl::Style::Combo);
+            add (pg, TpWow, "Wow & flutter", "Motor and capstan speed wobble: the repeats drift in pitch.");
+            add (pg, TpSpread, "Spread", "Places the active heads across the stereo field.");
+            add (pg, TpHiss, "Hiss", "Tape noise while the tape carries sound; it fades a few seconds after the input stops.");
+            add (pg, ClearTailOnChange, "Tail on mode change", tailHelp, DetailControl::Style::Segments, { "LET RING", "CLEAR" });
+            pages.push_back (std::move (pg));
+        }
+        else if (! interval)
         {
             Page pg { "BBD", 2, {} };
             add (pg, BbdMotion, "Motion", "Wow and flutter depth: slow pitch drift of the repeats.");
@@ -319,16 +330,33 @@ void EffectDetail::rebuild()
     }
     else if (effect == Effect::Reverb)
     {
-        const bool wash = P.value (ReverbMode) > 0.5f;
-        title = wash ? "WASH SETTINGS" : "PLATE SETTINGS";
-        Page pg { wash ? "WASH" : "PLATE", 2, {} };
-        add (pg, Width, "Stereo width", "Width of the ambience: 0 % is mono, 150 % extra wide (mono fold-down stays intact).");
-        add (pg, wash ? WaSize : PlSize, "Size", "Scales the space; changes smoothly.");
-        if (! wash) add (pg, PlDiffusion, "Diffusion", "Controls how quickly the tail becomes dense.");
-        add (pg, wash ? WaLowRatio : PlLowRatio, "Low decay", "Bass decay relative to the main tail.");
-        add (pg, wash ? WaRate : PlRate, "Motion rate", "Sets the speed of the modulation.");
-        add (pg, ClearTailOnChange, "Tail on mode change", tailHelp, DetailControl::Style::Segments, { "LET RING", "CLEAR" });
+        const int rm = juce::jlimit (0, 2, (int) P.value (ReverbMode));
+        const bool wash = rm == 1;
+        title = rm == 2 ? "HALL SETTINGS" : (wash ? "WASH SETTINGS" : "PLATE SETTINGS");
+        Page pg { rm == 2 ? "HALL" : (wash ? "WASH" : "PLATE"), 2, {} };
+        if (rm == 2)
+        {
+            add (pg, HaEarly, "Early reflections", "Level of the first reflections from the walls: high for a clear sense of room.");
+            add (pg, HaDiffusion, "Diffusion", "Controls how quickly the tail becomes dense.");
+            add (pg, HaLowRatio, "Bass multiplier", "Bass decay relative to the main tail (crossover about 350 Hz).");
+            add (pg, HaMotion, "Motion", "Random wander of the hall: smooths metallic ringing and adds a gentle chorus.");
+            add (pg, HaRate, "Motion rate", "Sets the speed of the wander.");
+        }
+        else
+        {
+            add (pg, wash ? WaSize : PlSize, "Size", "Scales the space; changes smoothly.");
+            if (! wash) add (pg, PlDiffusion, "Diffusion", "Controls how quickly the tail becomes dense.");
+            add (pg, wash ? WaLowRatio : PlLowRatio, "Low decay", "Bass decay relative to the main tail.");
+            add (pg, wash ? WaRate : PlRate, "Motion rate", "Sets the speed of the modulation.");
+        }
         pages.push_back (std::move (pg));
+        Page sh { "SHIMMER", 2, {} };
+        add (sh, Shimmer, "Shimmer", "Pitch-shifted feedback: every pass through the reverb rises by the interval (octave-up shimmer).");
+        auto& iv = add (sh, ShimmerPitch, "Interval", "Interval of each shimmer pass, in semitones.", DetailControl::Style::Combo);
+        iv.enabledWhen = [&P] { return P.value (Shimmer) > 0.5f; };
+        add (sh, Width, "Stereo width", "Width of the ambience: 0 % is mono, 150 % extra wide (mono fold-down stays intact).");
+        add (sh, ClearTailOnChange, "Tail on mode change", tailHelp, DetailControl::Style::Segments, { "LET RING", "CLEAR" });
+        pages.push_back (std::move (sh));
     }
     else
     {

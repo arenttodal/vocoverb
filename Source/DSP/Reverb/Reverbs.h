@@ -1,7 +1,10 @@
 // Reverb engines. Plate: original plate-style figure-eight tank following the published Dattorro topology
 // (J. Dattorro, "Effect Design Part 1", JAES 1997) with stereo input, size scaling, low-band decay and an energy-
 // guarded freeze. Wash: original 8/16-line modulated feedback delay network (orthogonal Hadamard matrix) with
-// input diffusion and a bloom stage. Both are 100% wet.
+// input diffusion and a bloom stage. Hall: original room-to-hall design in the spirit of the classic Lexicon
+// halls (early-reflection pattern scaled by size, input diffusion, a ring of four modulated allpass/delay sections
+// with smoothed random "wander", bass multiplier and decay-consistent damping). Shimmer: pitch-shifted feedback
+// into any reverb's input (octave-up shimmer). All are 100% wet.
 #pragma once
 
 #include "../Delay/Delays.h"
@@ -63,6 +66,61 @@ private:
     float sizeSm = 1.0f, fbA = 0.0f, fbB = 0.0f;
     FreezeGuard guard;
     ClearList clears;
+};
+
+class HallReverb
+{
+public:
+    static constexpr int kSections = 4, kEarly = 12;
+    void prepare (double sampleRate);
+    void reset() noexcept;
+    void beginClear() noexcept { resetSmallState(); clears.begin(); }
+    bool clearStep (int budget) noexcept { return clears.step (budget); }
+    void process (const SpaceContext& ctx, const float* inL, const float* inR, float* outL, float* outR, int n) noexcept;
+
+private:
+    void resetSmallState() noexcept;
+    struct Section
+    {
+        AllpassDelay ap1, ap2;
+        DelayLine d1, d2;
+        OnePoleLP damp, low;
+        Drift wander;
+        Lfo spin;
+        float out = 0.0f;
+    };
+    double sr = 48000.0;
+    DelayLine pre, preR, erL, erR;
+    OnePoleLP bandL, bandR;
+    DcBlocker hpL, hpR;
+    AllpassDelay diffL[4], diffR[4], erApL, erApR;
+    Section sec[kSections];
+    float sizeSm = 0.55f;
+    FreezeGuard guard;
+    ClearList clears;
+};
+
+/** Shimmer: two-grain pitch shifter on the reverb output, band-limited and level-guarded, fed back to the input. */
+class ShimmerUnit
+{
+public:
+    void prepare (double sampleRate);
+    void reset() noexcept;
+    /** Writes the next block's feedback (to add to the reverb input) from this block's reverb output. */
+    void process (float amount, float semitones, const float* revL, const float* revR, float* fbL, float* fbR, int n) noexcept;
+
+private:
+    struct Shifter
+    {
+        DelayLine line;
+        double phase = 0.0;
+        float window = 2400.0f;
+        float process (float x, float ratio) noexcept;
+    };
+    double sr = 48000.0;
+    Shifter sh[2];
+    Biquad hp[2], lp[2];
+    float env = 0.0f, envA = 0.01f, envR = 0.001f, amountSm = 0.0f;
 };
 
 class WashReverb

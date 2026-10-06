@@ -384,37 +384,64 @@ DelayView::DelayView (PluginProcessor& p, CaptureClock& c) : GraphWell (p), cloc
 void DelayView::computeModel()
 {
     const auto& P = proc;
-    const bool interval = P.value (DelayMode) > 0.5f;
-    const bool sync = P.value (interval ? IvSync : BbdSync) > 0.5f;
+    const int mode = juce::jlimit (0, 2, (int) P.value (DelayMode));
+    const int syncId[3] = { BbdSync, IvSync, TpSync }, divId[3] = { BbdDiv, IvDiv, TpDiv }, timeId[3] = { BbdTime, IvTime, TpTime };
+    const int fbId[3] = { BbdFeedback, IvFeedback, TpFeedback }, toneId[3] = { BbdTone, IvTone, TpTone }, lvlId[3] = { BbdLevel, IvLevel, TpLevel };
+    const bool sync = P.value (syncId[mode]) > 0.5f;
     const double bpm = std::max (40.0, (double) P.value (Tempo));
-    double T = sync ? divisionBeats ((int) P.value (interval ? IvDiv : BbdDiv)) * 60.0 / bpm
-                    : (double) P.value (interval ? IvTime : BbdTime) / 1000.0;
+    double T = sync ? divisionBeats ((int) P.value (divId[mode])) * 60.0 / bpm : (double) P.value (timeId[mode]) / 1000.0;
     T = std::max (0.03, T);
-    const float fb = P.value (interval ? IvFeedback : BbdFeedback) / 100.0f;
-    const float tone = P.value (interval ? IvTone : BbdTone);
-    const float lvl = juce::Decibels::decibelsToGain (P.value (interval ? IvLevel : BbdLevel));
-    const float key = (float) T * 1000.0f + fb * 7.0f + tone * 0.001f + lvl + (interval ? 0.5f : 0.0f);
+    const float fb = juce::jmin (1.0f, P.value (fbId[mode]) / 100.0f);
+    const float tone = P.value (toneId[mode]);
+    const float lvl = juce::Decibels::decibelsToGain (P.value (lvlId[mode]));
+    // tape: the active heads (1x / 2x / 3x of the head-1 time) all sound and feed back
+    const int heads = mode == 2 ? TapeDelay::headMask ((int) P.value (TpHeads)) : 1;
+    const float key = (float) T * 1000.0f + fb * 7.0f + tone * 0.001f + lvl + (float) mode * 0.5f + (float) heads * 0.013f;
     if (std::abs (key - lastModelKey) < 1.0e-4f && ! modelTop.empty()) return;
     lastModelKey = key;
     const int W = getWidth();
     modelTop.assign ((size_t) W, 0.0f); modelBot.assign ((size_t) W, 0.0f);
     const float dull = juce::jlimit (0.3f, 1.0f, std::log2 (tone / 300.0f) / 6.0f); // darker tone -> finer, lower repeats
+    // repeat times and strengths: tap sums of the head pattern, decaying by feedback per pass
+    std::vector<std::pair<double, float>> reps;
+    if (mode != 2) for (int k = 1; k < 40; ++k) reps.push_back ({ k * T, std::pow (fb, (float) (k - 1)) * std::pow (dull, (float) k * 0.5f) });
+    else
+    {
+        int nh = 0; for (int h = 0; h < 3; ++h) if (heads & (1 << h)) ++nh;
+        const float fbh = fb / std::sqrt ((float) juce::jmax (1, nh));
+        // first pass: each head once; later passes: every pass adds one more head delay
+        std::vector<std::pair<int, float>> cur { { 0, 1.0f } };
+        for (int pass = 1; pass <= 8; ++pass)
+        {
+            std::vector<std::pair<int, float>> next;
+            for (auto& c : cur)
+                for (int h = 0; h < 3; ++h)
+                    if (heads & (1 << h))
+                    {
+                        const int at = c.first + h + 1;
+                        if (at * T > 6.0) continue;
+                        reps.push_back ({ at * T, c.second * std::pow (dull, (float) pass * 0.5f) });
+                        next.push_back ({ at, c.second * fbh });
+                    }
+            if (next.size() > 64) next.resize (64);
+            cur = std::move (next);
+        }
+    }
     for (int x = 0; x < W; ++x)
     {
         const double t = (x - dgeo::x0) / dgeo::pps;
         if (t < 0.0) continue;
         float a = 0.0f;
-        // excitation burst (0..0.3 s), then repeats every T decaying by feedback
+        // excitation burst (0..0.3 s), then the repeats
         if (t < 0.32) a = std::max (a, 0.85f * (float) std::sin (juce::MathConstants<double>::pi * t / 0.32));
-        for (int k = 1; k < 40; ++k)
+        float sum = 0.0f;
+        for (auto& r : reps)
         {
-            const double tk = k * T;
-            if (tk > t + 0.2) break;
-            const double d = (t - tk) / 0.11;
+            const double d = (t - r.first) / 0.11;
             if (d < -1.0 || d > 1.6) continue;
-            const float env = (float) std::exp (-d * d * 2.2);
-            a = std::max (a, std::min (1.0f, lvl * 2.2f) * std::pow (fb, (float) (k - 1)) * std::pow (dull, (float) k * 0.5f) * env);
+            sum += r.second * (float) std::exp (-d * d * 2.2);
         }
+        a = std::max (a, std::min (1.0f, lvl * 2.2f) * std::min (1.0f, sum));
         const float n = 0.55f + 0.45f * rnd ((uint32_t) x * 7u + 3u);
         modelTop[(size_t) x] = a * n * dgeo::amp;
         modelBot[(size_t) x] = a * (0.55f + 0.45f * rnd ((uint32_t) x * 11u + 5u)) * dgeo::amp;
@@ -534,11 +561,12 @@ ReverbView::ReverbView (PluginProcessor& p, CaptureClock& c) : GraphWell (p), cl
 
 void ReverbView::computeModel()
 {
-    const bool wash = proc.value (ReverbMode) > 0.5f;
-    const float decay = proc.value (wash ? WaDecay : PlDecay);
-    const float bloom = wash ? proc.value (WaBloom) / 100.0f : 0.05f;
-    const float key = decay * 3.0f + bloom * 11.0f + (wash ? 0.5f : 0.0f);
-    spreadScale = wash ? 0.85f + 0.3f * bloom : 0.75f;
+    const int mode = juce::jlimit (0, 2, (int) proc.value (ReverbMode));
+    const bool wash = mode == 1;
+    const float decay = proc.value (mode == 0 ? PlDecay : (wash ? WaDecay : HaDecay));
+    const float bloom = wash ? proc.value (WaBloom) / 100.0f : (mode == 2 ? 0.02f + 0.04f * proc.value (HaSize) / 100.0f : 0.05f);
+    const float key = decay * 3.0f + bloom * 11.0f + (float) mode * 0.5f;
+    spreadScale = wash ? 0.85f + 0.3f * bloom : (mode == 2 ? 0.6f + 0.25f * proc.value (HaSize) / 100.0f : 0.75f);
     if (std::abs (key - lastModelKey) < 1.0e-4f && ! modelE.empty()) return;
     lastModelKey = key;
     const int W = getWidth();
@@ -560,7 +588,7 @@ void ReverbView::update()
     lastAlpha = clock.liveAlpha();
     if (idle && lastNow >= 0) return;
     lastNow = clock.now();
-    motionPhase += 0.012f * (0.2f + proc.value (proc.value (ReverbMode) > 0.5f ? WaMotion : PlMotion) / 100.0f);
+    motionPhase += 0.012f * (0.2f + proc.value (std::array<int, 3> { PlMotion, WaMotion, HaMotion }[(size_t) juce::jlimit (0, 2, (int) proc.value (ReverbMode))]) / 100.0f);
     const int W = getWidth();
     liveE.assign ((size_t) W, 0.0f);
     auto& t = proc.telemetry();

@@ -103,7 +103,7 @@ private:
     ParamCombo dMode;
     IconButton dMenu { IconButton::Icon::Sliders, "Delay settings" };
     DelayView dGraph;
-    ParamToggleButton bbdSync, ivSync;
+    ParamToggleButton bbdSync, ivSync, tpSync;
     std::unique_ptr<ParamKnob> dk[5];
 
     // reverb
@@ -148,7 +148,7 @@ MainView::MainView (PluginProcessor& p, PluginEditor& e)
     : proc (p), editor (e),
       mixKnob (p, Mix, "DRY / WET", ParamKnob::Style::Header),
       dDot (p, DelayEnable, "delay"), dMode (p, DelayMode), dGraph (p, clock),
-      bbdSync (p, BbdSync, "SYNC"), ivSync (p, IvSync, "SYNC"),
+      bbdSync (p, BbdSync, "SYNC"), ivSync (p, IvSync, "SYNC"), tpSync (p, TpSync, "SYNC"),
       rDot (p, ReverbEnable, "reverb"), rMode (p, ReverbMode), rGraph (p, clock),
       routeParallel (p, Routing, 0, IconButton::Icon::RouteParallel, "Parallel", "Parallel: delay and reverb both hear the input (two independent branches)"),
       routeDR (p, Routing, 1, IconButton::Icon::RouteDR, juce::String (juce::CharPointer_UTF8 ("Delay \xe2\x86\x92 Reverb")), juce::String (juce::CharPointer_UTF8 ("Delay \xe2\x86\x92 Reverb: the delay feeds the reverb"))),
@@ -165,7 +165,7 @@ MainView::MainView (PluginProcessor& p, PluginEditor& e)
 {
     setOpaque (true);
     for (juce::Component* c : std::initializer_list<juce::Component*> { &prevPreset, &nextPreset, &heart, &loadBtn, &saveBtn, &gearBtn, &presetName, &abSeg, &mixKnob,
-                                &inMeter, &outMeter, &dDot, &dMode, &dMenu, &dGraph, &bbdSync, &ivSync, &rDot, &rMode, &rMenu, &rGraph,
+                                &inMeter, &outMeter, &dDot, &dMode, &dMenu, &dGraph, &bbdSync, &ivSync, &tpSync, &rDot, &rMode, &rMenu, &rGraph,
                                 &routeParallel, &routeDR, &routeRD, &placement, &hDot, &chordBadge, &source, &polHold, &polRelease, &polAmbient, &hMenu, &hGraph, &hint,
                                 &pitchWheel, &modWheel, &keyboard, &latch, &freeze, &wetOnly, &panic, &tailKill })
         addAndMakeVisible (c);
@@ -227,9 +227,9 @@ MainView::MainView (PluginProcessor& p, PluginEditor& e)
     latch.setTooltip ("LATCH holds the played harmony after key-up (harmony state). Separate from FREEZE and from the Hold Last policy.");
     freeze.setTooltip ("FREEZE holds the audio ambience (never creates sound by itself). Chords can still change over it in After Space.");
     wetOnly.setTooltip ("WET ONLY removes the dry signal completely (return tracks). It overrides DRY / WET and keeps its value.");
-    for (juce::Button* b : std::initializer_list<juce::Button*> { &latch, &freeze, &wetOnly, &bbdSync, &ivSync })
+    for (juce::Button* b : std::initializer_list<juce::Button*> { &latch, &freeze, &wetOnly, &bbdSync, &ivSync, &tpSync })
         b->getProperties().set ("radius", 6.0f);
-    bbdSync.getProperties().set ("capPx", 9.5f); ivSync.getProperties().set ("capPx", 9.5f);
+    for (auto* b : { &bbdSync, &ivSync, &tpSync }) b->getProperties().set ("capPx", 9.5f);
     // compact action group: 11.75 px medium labels, identical radius / padding for all three
     for (juce::Button* b : std::initializer_list<juce::Button*> { &latch, &freeze, &wetOnly })
     {
@@ -317,14 +317,22 @@ void MainView::savePresetDialog()
 
 void MainView::bindModeKnobs()
 {
-    const bool interval = proc.value (DelayMode) > 0.5f;
-    if (interval)
+    const int dm = juce::jlimit (0, 2, (int) proc.value (DelayMode));
+    if (dm == 1)
     {
         dk[0]->bind (proc.value (IvSync) > 0.5f ? IvDiv : IvTime, "Time");
         dk[1]->bind (IvFeedback, "Feedback");
         dk[2]->bind (IvTap2Semi, "Interval");
         dk[3]->bind (IvSmear, "Smear");
         dk[4]->bind (IvLevel, "Level");
+    }
+    else if (dm == 2)
+    {
+        dk[0]->bind (proc.value (TpSync) > 0.5f ? TpDiv : TpTime, "Time");
+        dk[1]->bind (TpFeedback, "Feedback");
+        dk[2]->bind (TpTone, "Tone");
+        dk[3]->bind (TpDrive, "Drive");
+        dk[4]->bind (TpLevel, "Level");
     }
     else
     {
@@ -334,10 +342,12 @@ void MainView::bindModeKnobs()
         dk[3]->bind (BbdAge, "Age");
         dk[4]->bind (BbdLevel, "Level");
     }
-    bbdSync.setVisible (! interval && detailOpen != 0); // the delay settings heading carries its own SYNC
-    ivSync.setVisible (interval && detailOpen != 0);
-    const bool wash = proc.value (ReverbMode) > 0.5f;
-    if (wash) { rk[0]->bind (WaDecay, "Decay"); rk[1]->bind (WaBloom, "Bloom"); rk[2]->bind (WaTone, "Tone"); rk[3]->bind (WaMotion, "Motion"); rk[4]->bind (WaLevel, "Level"); }
+    bbdSync.setVisible (dm == 0 && detailOpen != 0); // the delay settings heading carries its own SYNC
+    ivSync.setVisible (dm == 1 && detailOpen != 0);
+    tpSync.setVisible (dm == 2 && detailOpen != 0);
+    const int rm = juce::jlimit (0, 2, (int) proc.value (ReverbMode));
+    if (rm == 1) { rk[0]->bind (WaDecay, "Decay"); rk[1]->bind (WaBloom, "Bloom"); rk[2]->bind (WaTone, "Tone"); rk[3]->bind (WaMotion, "Motion"); rk[4]->bind (WaLevel, "Level"); }
+    else if (rm == 2) { rk[0]->bind (HaDecay, "Decay"); rk[1]->bind (HaPredelay, "Pre-delay"); rk[2]->bind (HaSize, "Size"); rk[3]->bind (HaTone, "Tone"); rk[4]->bind (HaLevel, "Level"); }
     else { rk[0]->bind (PlDecay, "Decay"); rk[1]->bind (PlPredelay, "Pre-delay"); rk[2]->bind (PlTone, "Tone"); rk[3]->bind (PlMotion, "Motion"); rk[4]->bind (PlLevel, "Level"); }
 }
 
@@ -398,6 +408,7 @@ void MainView::resized()
     dGraph.setBounds (42, 170, 704, 215);
     bbdSync.setBounds (670, 182, 61, 28);
     ivSync.setBounds (670, 182, 61, 28);
+    tpSync.setBounds (670, 182, 61, 28);
     const int dX[5] = { 105, 245, 388, 532, 675 }, rX[5] = { 858, 1002, 1143, 1288, 1433 }, hX[4] = { 1024, 1169, 1298, 1433 };
     for (int i = 0; i < 5; ++i) dk[i]->setBounds (dX[i] - ParamKnob::kEngineCx, 459 - ParamKnob::kEngineCy, ParamKnob::kEngineW, ParamKnob::kEngineH);
     rDot.setBounds (36 + 750, ey - 12, 25, 24);           // same offset from the reverb graph (x 791) as the delay dot
@@ -554,7 +565,8 @@ void MainView::update()
     inMeter.setLevels (t.inPeakL.exchange (0.0f), t.inPeakR.exchange (0.0f));
     outMeter.setLevels (t.outPeakL.exchange (0.0f), t.outPeakR.exchange (0.0f));
     clock.update (t, proc.currentSampleRate());
-    const int modeKey = (int) proc.value (DelayMode) + 2 * (int) proc.value (ReverbMode) + 4 * (proc.value (BbdSync) > 0.5f) + 8 * (proc.value (IvSync) > 0.5f);
+    const int modeKey = (int) proc.value (DelayMode) + 3 * (int) proc.value (ReverbMode) + 9 * (proc.value (BbdSync) > 0.5f) + 18 * (proc.value (IvSync) > 0.5f)
+                        + 36 * (proc.value (TpSync) > 0.5f);
     if (modeKey != lastModeKey) { lastModeKey = modeKey; bindModeKnobs(); }
     if (! fixtureMode)
     {
