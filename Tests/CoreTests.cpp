@@ -174,3 +174,26 @@ TEST ("factory presets: 16+ presets, all ids valid")
     for (const auto& pr : fp)
         for (const auto& kv : pr.values) CHECK_MSG (paramIndexForId (kv.first) >= 0, pr.name + ": " + kv.first);
 }
+
+TEST ("params: Classic-only migration and Dry/Wet law")
+{
+    // legacy Off -> Harmony Enable off (method stored as Classic); FFT/Resonator/Shift -> Classic
+    for (int m = 0; m < 5; ++m)
+    {
+        ParamSet ps; ps[HarmMethod] = (float) m; ps[HarmEnable] = 1;
+        migrateLegacyHarmony (ps);
+        CHECK (ps.i (HarmMethod) == 1);
+        CHECK (ps.b (HarmEnable) == (m != 0));
+        CHECK (effectiveHarmonyMethod (ps) == (m != 0 ? 1 : 0));
+    }
+    ParamSet off; off[HarmEnable] = 0;
+    CHECK (effectiveHarmonyMethod (off) == 0);
+    // mix law: endpoints exact, 50% = original unity blend, continuous and monotonic
+    CHECK (mixDryGain (0) == 1.0f && mixWetGain (0) == 0.0f);
+    CHECK (mixDryGain (100) == 0.0f && mixWetGain (100) == 1.0f);
+    CHECK (mixDryGain (50) == 1.0f && mixWetGain (50) == 1.0f);
+    CHECK (std::abs (mixWetGain (35) - 0.7f) < 1e-6f && mixDryGain (35) == 1.0f);
+    float pd = 2, pw = -1;
+    for (int k = 0; k <= 100; ++k) { CHECK (mixDryGain ((float) k) <= pd && mixWetGain ((float) k) >= pw); pd = mixDryGain ((float) k); pw = mixWetGain ((float) k); }
+    CHECK (paramInfo (Mix).def == 50.0f); // sessions saved before the mix parameter keep their blend
+}

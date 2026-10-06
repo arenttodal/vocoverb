@@ -41,6 +41,13 @@ jobs:
           for f in out/reports/auval-aumf.txt out/reports/auval-aufx.txt out/reports/pluginval-vst3.txt out/reports/pluginval-au.txt out/reports/pluginval-au-audio.txt out/reports/hostmidi-vst3.txt out/reports/hostmidi-aumf.txt out/reports/hostmidi-aufx.txt; do
             echo "===== $f (tail)"; tail -25 "$f" 2>/dev/null || true; done
           echo "===== benchmark"; cat out/reports/benchmark.txt 2>/dev/null || true
+      - name: Visual comparison of the native macOS capture with the approved reference
+        if: always()
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv" && "$RUNNER_TEMP/venv/bin/pip" -q install pillow
+          "$RUNNER_TEMP/venv/bin/python" tools/visual/compare.py references/playable-ambience-approved-gui.png \
+            out/screenshots/reference-fixture-1536x1024.png out/reports/visual-compare-macos | tee out/reports/visual-compare-macos.txt
+          grep -E "UI worst case|graphs draw" out/reports/standalone-selftest.txt || true
       - name: Installer / uninstaller test (throwaway HOME)
         run: |
           set -euo pipefail

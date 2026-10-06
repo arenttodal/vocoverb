@@ -153,8 +153,10 @@ void PluginProcessor::setValue (int index, float realValue)
     }
 }
 
-void PluginProcessor::applyParams (const ParamSet& ps, bool includeHostLocal)
+void PluginProcessor::applyParams (const ParamSet& psIn, bool includeHostLocal)
 {
+    ParamSet ps = psIn;
+    migrateLegacyHarmony (ps);
     for (int i = 0; i < kNumParams; ++i)
     {
         if (! includeHostLocal && isHostLocalParam (i)) continue;
@@ -447,7 +449,8 @@ juce::var PluginProcessor::diagnostics() const
     o->setProperty ("wetProcessingLatencySamples", engine.telemetry.wetLatency.load());
     o->setProperty ("timing", appliedTiming == 1 ? "Studio" : "Live");
     o->setProperty ("quality", juce::StringArray { "Eco", "Standard", "High" }[appliedQuality]);
-    o->setProperty ("harmonyMethod", juce::String (paramValueToText (HarmMethod, value (HarmMethod))));
+    o->setProperty ("harmonyMethod", effectiveHarmonyMethod (currentParams()) == 1 ? "Classic" : "Off");
+    o->setProperty ("dryWetPercent", value (Mix));
     o->setProperty ("noteSource", juce::String (paramValueToText (NoteSource, value (NoteSource))));
     o->setProperty ("routing", juce::String (paramValueToText (Routing, value (Routing))));
     o->setProperty ("placement", juce::String (paramValueToText (Placement, value (Placement))));
@@ -507,6 +510,7 @@ void PluginProcessor::stateFromXml (const juce::XmlElement& xml)
             const int idx = paramIndexForId (p->getStringAttribute ("id").toStdString());
             if (idx >= 0) ps[idx] = paramSnap (idx, (float) p->getDoubleAttribute ("v", paramInfo (idx).def));
         }
+    migrateLegacyHarmony (ps); // sessions saved before the Classic-only build
     for (int i = 0; i < kNumParams; ++i)
         if (auto* p = params[(size_t) i]) p->setValueNotifyingHost (p->convertTo0to1 (ps[i]));
     if (auto* se = xml.getChildByName ("SNAPSHOTS"))

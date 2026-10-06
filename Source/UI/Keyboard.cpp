@@ -19,7 +19,7 @@ juce::Rectangle<float> HarmonyKeyboard::keyRect (int note) const
     const float h = (float) getHeight();
     if (! isBlack (note)) return { (float) whiteIndex (note) * whiteW, 0.0f, whiteW, h };
     const float x = (float) whiteIndex (note) * whiteW - whiteW * 0.32f;
-    return { x, 0.0f, whiteW * 0.64f, h * 0.6f };
+    return { x, 0.0f, whiteW * 0.64f, h * 0.585f };
 }
 
 int HarmonyKeyboard::noteAt (juce::Point<float> p) const
@@ -62,30 +62,37 @@ void HarmonyKeyboard::paint (juce::Graphics& g)
 {
     whiteW = (float) getWidth() / (float) whites;
     const bool sharps = keyPrefersSharps ((int) proc.value (ChRoot));
+    const float H = (float) getHeight();
+    // keybed backing (visible as the fine separations between keys)
+    g.setColour (juce::Colour (0xffbdb4a5));
+    g.fillRoundedRectangle (getLocalBounds().toFloat(), 4.0f);
     int count = 0;
     for (int n = low; count < whites && n < 128; ++n)
     {
         if (isBlack (n)) continue;
-        auto r = keyRect (n).reduced (0.6f, 0.0f);
+        auto r = keyRect (n).withTrimmedLeft (count == 0 ? 0.6f : 0.5f).withTrimmedRight (0.5f).withTrimmedTop (0.6f).withTrimmedBottom (0.6f);
         const float on = voiced[(size_t) n], rel = releasing[(size_t) n];
-        g.setGradientFill (juce::ColourGradient (juce::Colour (0xfffbfaf6), r.getX(), r.getY(), juce::Colour (0xffe9e4da), r.getX(), r.getBottom(), false));
-        g.fillRoundedRectangle (r, 3.0f);
+        juce::Path key;
+        key.addRoundedRectangle (r.getX(), r.getY(), r.getWidth(), r.getHeight(), 4.0f, 4.0f, count == 0, count == whites - 1, true, true);
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xfffdfbf7), r.getX(), r.getY(), juce::Colour (0xffefebe3), r.getX(), r.getBottom(), false));
+        g.fillPath (key);
         if (on > 0.0f || rel > 0.01f)
         {
-            const auto c = on > 0.0f ? theme::accent : theme::amber;
-            const float a = on > 0.0f ? 0.9f : juce::jlimit (0.15f, 0.5f, rel);
-            g.setGradientFill (juce::ColourGradient (c.withAlpha (a * 0.35f), r.getX(), r.getY(), c.withAlpha (a), r.getX(), r.getBottom(), false));
-            g.fillRoundedRectangle (r, 3.0f);
+            const float a = on > 0.0f ? 1.0f : juce::jlimit (0.15f, 0.55f, rel);
+            g.setGradientFill (juce::ColourGradient (juce::Colour (0xffffa06e).withAlpha (a), r.getX(), r.getY(), juce::Colour (0xffff874a).withAlpha (a), r.getX(), r.getBottom(), false));
+            g.fillPath (key);
         }
-        if (n == mouseNote || qwertyDown[(size_t) n]) { g.setColour (juce::Colours::black.withAlpha (0.12f)); g.fillRoundedRectangle (r, 3.0f); }
-        if (customMark[(size_t) n]) { g.setColour (theme::accent); g.drawRoundedRectangle (r.reduced (2.0f), 3.0f, 2.0f); }
-        g.setColour (juce::Colour (0xff6d675c));
-        g.drawRoundedRectangle (r, 3.0f, 0.8f);
+        // small lower shadow and a faint light top edge
+        g.setColour (juce::Colours::black.withAlpha (0.10f));
+        g.fillRect (r.getX() + 1.0f, r.getBottom() - 2.0f, r.getWidth() - 2.0f, 1.2f);
+        if (n == mouseNote || qwertyDown[(size_t) n]) { g.setColour (juce::Colours::black.withAlpha (0.10f)); g.fillPath (key); }
+        if (customMark[(size_t) n]) { g.setColour (theme::accent); g.strokePath (key, juce::PathStrokeType (2.0f)); }
         if (on > 0.0f || n % 12 == 0)
         {
-            g.setColour (on > 0.0f ? theme::text : theme::textMuted);
-            g.setFont (theme::font (11.5f, on > 0.0f ? 2 : 0));
-            g.drawText (on > 0.0f ? noteName (n, sharps, false) : noteName (n, sharps, true), r.withTop (r.getBottom() - 18.0f), juce::Justification::centred);
+            const bool active = on > 0.0f;
+            g.setColour (active ? juce::Colour (0xff2a1a12) : juce::Colour (0xffa6a093));
+            g.setFont (theme::capFont (active ? 10.5f : 10.0f, active ? 2 : 0));
+            g.drawText (active ? noteName (n, sharps, false) : noteName (n, sharps, true), r.withTop (r.getBottom() - 30.0f).withTrimmedBottom (8.0f), juce::Justification::centred);
         }
         ++count;
     }
@@ -93,26 +100,31 @@ void HarmonyKeyboard::paint (juce::Graphics& g)
     for (int n = low; count < whites && n < 128; ++n)
     {
         if (! isBlack (n)) { ++count; continue; }
-        auto r = keyRect (n);
+        auto r = keyRect (n).withTrimmedTop (0.6f);
         const float on = voiced[(size_t) n], rel = releasing[(size_t) n];
-        g.setColour (juce::Colours::black.withAlpha (0.25f));
-        g.fillRoundedRectangle (r.translated (1.0f, 1.5f), 3.0f);
-        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff3a3833), r.getX(), r.getY(), juce::Colour (0xff141412), r.getX(), r.getBottom(), false));
-        g.fillRoundedRectangle (r, 3.0f);
+        juce::Path key;
+        key.addRoundedRectangle (r.getX(), r.getY(), r.getWidth(), r.getHeight(), 3.0f, 3.0f, false, false, true, true);
+        g.setColour (juce::Colours::black.withAlpha (0.22f));
+        g.fillRoundedRectangle (r.translated (1.2f, 1.6f), 3.0f);
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff3b3a37), r.getX(), r.getY(), juce::Colour (0xff121212), r.getX(), r.getBottom(), false));
+        g.fillPath (key);
         if (on > 0.0f || rel > 0.01f)
         {
-            const auto c = on > 0.0f ? theme::accent : theme::amber;
-            g.setGradientFill (juce::ColourGradient (c.brighter (0.2f), r.getX(), r.getY(), c.darker (0.2f), r.getX(), r.getBottom(), false));
+            g.setGradientFill (juce::ColourGradient (juce::Colour (0xffff6a2c), r.getX(), r.getY(), juce::Colour (0xffe2460f), r.getX(), r.getBottom(), false));
             g.setOpacity (on > 0.0f ? 1.0f : juce::jlimit (0.2f, 0.6f, rel));
-            g.fillRoundedRectangle (r.reduced (1.5f), 2.5f);
+            g.fillRoundedRectangle (r.reduced (1.4f), 2.5f);
             g.setOpacity (1.0f);
         }
-        if (n == mouseNote || qwertyDown[(size_t) n]) { g.setColour (juce::Colours::white.withAlpha (0.15f)); g.fillRoundedRectangle (r, 3.0f); }
-        if (customMark[(size_t) n]) { g.setColour (theme::accent); g.drawRoundedRectangle (r.reduced (1.0f), 3.0f, 2.0f); }
-        g.setColour (juce::Colours::white.withAlpha (0.12f));
-        g.drawHorizontalLine ((int) r.getY() + 2, r.getX() + 3.0f, r.getRight() - 3.0f);
+        // brighter top edge, darker lower edge (dimensional)
+        g.setColour (juce::Colours::white.withAlpha (0.16f));
+        g.fillRect (r.getX() + 2.0f, r.getY() + 1.5f, r.getWidth() - 4.0f, 1.0f);
+        g.setColour (juce::Colours::black.withAlpha (0.35f));
+        g.fillRect (r.getX() + 2.0f, r.getBottom() - 4.0f, r.getWidth() - 4.0f, 2.0f);
+        if (n == mouseNote || qwertyDown[(size_t) n]) { g.setColour (juce::Colours::white.withAlpha (0.15f)); g.fillPath (key); }
+        if (customMark[(size_t) n]) { g.setColour (theme::accent); g.strokePath (key, juce::PathStrokeType (2.0f)); }
     }
-    if (hasKeyboardFocus (false)) { g.setColour (theme::accent.withAlpha (0.6f)); g.drawRect (getLocalBounds(), 1); }
+    juce::ignoreUnused (H);
+    if (hasKeyboardFocus (false)) { g.setColour (theme::accent.withAlpha (0.6f)); g.drawRoundedRectangle (getLocalBounds().toFloat(), 4.0f, 1.0f); }
 }
 
 void HarmonyKeyboard::press (int note)
@@ -200,30 +212,38 @@ Wheel::Wheel (PluginProcessor& p, bool pitch) : proc (p), isPitch (pitch), value
 
 void Wheel::paint (juce::Graphics& g)
 {
+    // canonical geometry: 26 x 78 dark well at the top centre, label cap top 86 px below the well top
     auto r = getLocalBounds().toFloat();
-    auto slot = r.withTrimmedBottom (18.0f).reduced (r.getWidth() * 0.22f, 2.0f);
-    g.setColour (theme::display);
-    g.fillRoundedRectangle (slot, slot.getWidth() * 0.45f);
-    g.setColour (juce::Colours::black.withAlpha (0.4f));
-    g.drawRoundedRectangle (slot, slot.getWidth() * 0.45f, 1.0f);
+    auto slot = juce::Rectangle<float> (26.0f, 78.0f).withCentre ({ r.getCentreX(), 39.0f });
+    g.setColour (juce::Colours::white.withAlpha (0.55f));
+    g.drawRoundedRectangle (slot.expanded (0.8f).translated (0.0f, 0.8f), 9.0f, 1.0f);
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff2c3331), slot.getX(), slot.getY(), juce::Colour (0xff1b2120), slot.getRight(), slot.getY(), false));
+    g.fillRoundedRectangle (slot, 8.5f);
+    g.setColour (juce::Colours::black.withAlpha (0.55f));
+    g.drawRoundedRectangle (slot, 8.5f, 1.0f);
     const float norm = isPitch ? (value * 0.5f + 0.5f) : value;
-    const float y = slot.getBottom() - 10.0f - norm * (slot.getHeight() - 20.0f);
-    auto thumb = juce::Rectangle<float> (slot.getWidth() - 6.0f, 16.0f).withCentre ({ slot.getCentreX(), y });
-    g.setGradientFill (juce::ColourGradient (theme::knobFaceTop, thumb.getX(), thumb.getY(), theme::knobFaceBottom, thumb.getX(), thumb.getBottom(), false));
-    g.fillRoundedRectangle (thumb, 4.0f);
-    g.setColour (theme::accent);
-    g.fillRect (thumb.withSizeKeepingCentre (thumb.getWidth() * 0.4f, 2.5f));
-    g.setColour (theme::text);
-    g.setFont (theme::font (11.0f, 1));
-    g.drawText (isPitch ? "PITCH" : "MOD", r.removeFromBottom (16.0f), juce::Justification::centred);
+    const float y = slot.getBottom() - 15.0f - norm * (slot.getHeight() - 30.0f);
+    auto thumb = juce::Rectangle<float> (slot.getWidth() - 8.0f, 17.0f).withCentre ({ slot.getCentreX(), y });
+    g.setColour (juce::Colours::black.withAlpha (0.35f));
+    g.fillRoundedRectangle (thumb.translated (0.0f, 1.5f), 3.5f);
+    if (isPitch)
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xffff9a68), thumb.getX(), thumb.getY(), juce::Colour (0xffef6a34), thumb.getX(), thumb.getBottom(), false));
+    else
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xfff8f2e8), thumb.getX(), thumb.getY(), juce::Colour (0xffe1d8ca), thumb.getX(), thumb.getBottom(), false));
+    g.fillRoundedRectangle (thumb, 3.5f);
+    g.setColour (isPitch ? juce::Colour (0xffd84a14) : theme::accent);
+    g.fillRect (thumb.withSizeKeepingCentre (thumb.getWidth() * 0.55f, 2.0f));
+    g.setColour (theme::textLabel);
+    g.setFont (theme::capFont (9.0f, 1));
+    g.drawText (isPitch ? "PITCH" : "MOD", juce::Rectangle<float> (0.0f, 84.0f, r.getWidth(), 14.0f), juce::Justification::centred, false);
 }
 
 void Wheel::mouseDown (const juce::MouseEvent& e) { mouseDrag (e); }
 
 void Wheel::mouseDrag (const juce::MouseEvent& e)
 {
-    const float h = (float) getHeight() - 38.0f;
-    const float norm = juce::jlimit (0.0f, 1.0f, 1.0f - ((float) e.y - 12.0f) / h);
+    // matches the 78 px well drawn in paint(): handle travel from y 15 to y 63
+    const float norm = juce::jlimit (0.0f, 1.0f, (63.0f - (float) e.y) / 48.0f);
     value = isPitch ? norm * 2.0f - 1.0f : norm;
     send();
     repaint();

@@ -14,6 +14,12 @@ struct Telemetry
 
     std::atomic<float> inPeakL { 0 }, inPeakR { 0 }, outPeakL { 0 }, outPeakR { 0 }, wetPeak { 0 };
     std::array<std::atomic<float>, kHistLen> histDelay {}, histReverb {}, histWet {}, histDry {};
+    // signed min/max (mono) per bucket of the delay and reverb stage outputs: waveform-shaped displays
+    std::array<std::atomic<float>, kHistLen> histDelayMin {}, histDelayMax {}, histReverbMin {}, histReverbMax {};
+    // per-voice Classic band tap (min/max, scaled by the current Depth and duck) and the voice's note per bucket
+    static constexpr int kLanes = 6;
+    std::array<std::array<std::atomic<float>, kHistLen>, kLanes> histLaneMin {}, histLaneMax {};
+    std::array<std::array<std::atomic<int>, kHistLen>, kLanes> histLaneNote {};
     std::atomic<int> histWrite { 0 };
     std::array<std::atomic<float>, kSpecLen> spec {};
     std::atomic<int> specWrite { 0 };

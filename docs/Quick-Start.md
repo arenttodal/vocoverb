@@ -14,15 +14,22 @@ change the chord of the remaining tail with the keys.
 ## 2. Change the harmony
 - Click keys on the on-screen keyboard (or play a MIDI controller). With **Hold Last** (default) the last chord
   stays after you lift your hands. The keyboard and the chord readout show the notes actually voiced.
-- Or choose **CHORD** in the Harmony card and pick root/quality, or **INTERVALS**, or **ARP**.
+- Or pick **Chord**, **Intervals** or **Arp** in the Harmony card's **SOURCE** dropdown. Click the chord badge
+  (e.g. **C MINOR**) to edit the stored chord (root, quality, octave, inversion, voicing, 8 snapshots), the interval
+  set or the arpeggiator. The three small buttons next to the dropdown choose what happens with no keys held:
+  **pin** = Hold Last, **wave** = Release, **cloud** = Ambient.
 - No keys yet? A fresh preset with Hold Last uses its stored chord (C minor in most presets).
 
 ## 3. Compare
 - Turn **DEPTH** up: 0 % = ordinary ambience, 100 % = only the harmonised wet.
-- Switch the method: **CLASSIC** (filter-bank vocoder), **FFT** (STFT vocoder), **RESONATOR** (tuned resonances
-  excited by the wet signal), **SHIFT** (relative transposition — not absolute retuning).
+- Turn harmony off and on with the orange dot next to **HARMONY** (off = ordinary ambience). The harmony is the
+  Classic filter-bank vocoder; its bands, envelopes and carrier are under the Harmony card's **⋮** menu.
+- **DRY / WET** (top right) blends the untouched source against the ambience: 50 % keeps both at full level,
+  0 % = dry only, 100 % = wet only. The ambience output level and the dry level are in the gear (Settings) panel.
 - Compare **AFTER SPACE** (the existing tail follows new chords) and **BEFORE SPACE** (chords are imprinted, then echo).
-- Compare **PARALLEL**, **DELAY → REVERB**, **REVERB → DELAY**; BBD/INTERVAL; PLATE/WASH.
+- Compare the routing pictograms (**parallel**, **D → R**, **R → D**) and the BBD/Interval and Plate/Wash dropdowns.
+- The displays show the last few seconds since a phrase started (0 s = the onset); when everything is silent they
+  show a dim preview of the current delay pattern and decay.
 - Use **A / B** in the header; Advanced > Mix / Timing has Copy A>B and a bounded wet loudness match.
 - The SOURCE menu has **Experiments** (e.g. *C minor > A-flat > F minor*, *Freeze / Revoice*) with fixed timing
   markers so comparisons are repeatable.

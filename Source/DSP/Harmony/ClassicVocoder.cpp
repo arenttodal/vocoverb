@@ -96,6 +96,20 @@ void ClassicVocoder::process (const HarmonyContext& ctx, const float* inL, const
 
     for (int i = 0; i < n; ++i) { outL[i] = 0.0f; outR[i] = 0.0f; }
 
+    // visualization tap: which synthesis band is nearest each sounding voice's fundamental
+    int laneOfBand[kMaxBands];
+    for (int b = 0; b < bands; ++b) laneOfBand[b] = -1;
+    if (ctx.tap != nullptr && ctx.voices != nullptr)
+        for (int v = 0; v < kMaxVoices; ++v)
+        {
+            const auto& sl = ctx.voices->slot (v);
+            if (sl.note < 0 || sl.env <= 1.0e-4f) continue;
+            const float f = 440.0f * std::exp2 (sl.logHz);
+            int best = -1; float bestD = 1.0e9f;
+            for (int b = 0; b < bands; ++b) { const float d = std::abs (std::log2 (fc[b] / f)); if (d < bestD) { bestD = d; best = b; } }
+            if (best >= 0 && laneOfBand[best] < 0) laneOfBand[best] = v;
+        }
+
     // Pass 2: synthesis
     for (int b = 0; b < bands; ++b)
     {
@@ -107,6 +121,8 @@ void ClassicVocoder::process (const HarmonyContext& ctx, const float* inL, const
         const bool valid0 = i0 >= 0 && i0 < bands, valid1 = i0 + 1 >= 0 && i0 + 1 < bands;
         const float tg = tiltGain[b] * calib;
         float eC = bd.envC, eG = bd.envG;
+        const int lane = laneOfBand[b];
+        float tapMn = 0.0f, tapMx = 0.0f;
         for (int i = 0; i < n; ++i)
         {
             float c = ctx.carrier[i];
@@ -123,7 +139,13 @@ void ClassicVocoder::process (const HarmonyContext& ctx, const float* inL, const
             const float cg = c * norm * tg;
             outL[i] += cg * mL;
             outR[i] += cg * mR;
+            if (lane >= 0)
+            {
+                const float t = 0.5f * cg * (mL + mR);
+                tapMn = std::min (tapMn, t); tapMx = std::max (tapMx, t);
+            }
         }
+        if (lane >= 0) { ctx.tap->mn[lane] = std::min (ctx.tap->mn[lane], tapMn); ctx.tap->mx[lane] = std::max (ctx.tap->mx[lane], tapMx); }
         bd.envC = eC; bd.envG = eG;
     }
 

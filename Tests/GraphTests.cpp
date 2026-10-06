@@ -84,8 +84,9 @@ TEST ("graph: zero Depth equals ordinary ambience; full Depth with no notes remo
         auto a = render (off, in, chordEvents (0.0, 2.0, { 48, 55 }));
         auto b = render (zero, in, chordEvents (0.0, 2.0, { 48, 55 }));
         // Live timing: the ordinary branch is aligned to the method's buffering latency (FFT N, Shift W/2)
+        // Classic-only build: every legacy method value runs Classic (no buffering latency in Live timing)
         HarmonyUnit probe; probe.prepare (kSr, 9000);
-        const size_t L = (size_t) probe.methodLatency (method, 1);
+        const size_t L = (size_t) probe.methodLatency (MethodClassic, 1);
         double maxD = 0; for (size_t i = L; i < a.size(); ++i) maxD = std::max (maxD, (double) std::abs (a.L[i - L] - b.L[i]));
         CHECK_MSG (maxD < 1e-6, "Depth 0 must equal Off for method " + std::to_string (method));
         ParamSet full = baseParams (method); full[NoNotePolicy] = 1; // Release, and no MIDI at all
@@ -319,14 +320,17 @@ TEST ("graph: mode / method / quality switches are click-free (bounded sample ju
     ParamSet p = baseParams (1); p[DelayEnable] = 1; p[Depth] = 60; p[NoteSource] = 1;
     auto base = render (p, in);
     auto sw = render (p, in, {}, kSr, 256, [] (double t, ParamSet& q) {
-        q[HarmMethod] = t > 1.0 ? 2.0f : 1.0f;
+        q[HarmMethod] = t > 1.0 ? 2.0f : 1.0f; // legacy FFT value: maps to Classic, must not glitch
         q[DelayMode] = t > 1.5 ? 1.0f : 0.0f;
         q[ReverbMode] = t > 2.0 ? 1.0f : 0.0f;
         q[Routing] = t > 2.5 ? 1.0f : 0.0f;
         q[Placement] = t > 3.0 ? 1.0f : 0.0f;
     });
+    // reference: steady renders of the first and the final configuration (their own signal content)
+    ParamSet fin = p; fin[DelayMode] = 1; fin[ReverbMode] = 1; fin[Routing] = 1; fin[Placement] = 1;
+    auto steady = render (fin, in);
     auto maxJump = [] (const std::vector<float>& x, size_t a, size_t b) { double m = 0; for (size_t i = a + 1; i < b; ++i) m = std::max (m, (double) std::abs (x[i] - x[i - 1])); return m; };
-    const double ref = maxJump (base.L, (size_t) (0.5 * kSr), (size_t) (3.9 * kSr));
+    const double ref = std::max (maxJump (base.L, (size_t) (0.5 * kSr), (size_t) (3.9 * kSr)), maxJump (steady.L, (size_t) (0.5 * kSr), (size_t) (3.9 * kSr)));
     const double got = maxJump (sw.L, (size_t) (0.5 * kSr), (size_t) (3.9 * kSr));
     metric ("switch.maxJumpRef", ref); metric ("switch.maxJump", got);
     CHECK (got < std::max (ref * 3.0, 0.02));
@@ -398,4 +402,33 @@ TEST ("graph: sample-rate transitions re-prepare safely (48 -> 96 -> 44.1 kHz) w
             const int L = eng->studioLatency (2);
             metric ("srTransition.studioLatency@" + std::to_string ((int) sr), L, "samples");
         }
+}
+
+
+
+TEST ("graph: Dry/Wet endpoints - 0% is the dry path only, 100% removes the dry, 50% equals the original blend")
+{
+    Buf in = noiseBurst (0.5, 2.0, kSr, 0.3f, 21);
+    ParamSet p = baseParams (1); p[WetOnly] = 0; p[DryLevel] = 0; p[WetLevel] = -6; p[NoteSource] = 1;
+    ParamSet dry0 = p; dry0[Mix] = 0;
+    auto a = render (dry0, in);
+    double e0 = 0; for (size_t i = 0; i < in.size(); ++i) e0 = std::max (e0, (double) std::abs (a.L[i] - in.L[i]));
+    metric ("mix0.maxDiffFromDry", e0);
+    CHECK_MSG (e0 < 1e-6, "Dry/Wet 0% must output only the dry signal");
+    ParamSet wet100 = p; wet100[Mix] = 100;
+    ParamSet wetOnly = p; wetOnly[WetOnly] = 1;
+    auto b = render (wet100, in), c = render (wetOnly, in);
+    double e1 = 0; for (size_t i = 0; i < in.size(); ++i) e1 = std::max (e1, (double) std::abs (b.L[i] - c.L[i]));
+    metric ("mix100.maxDiffFromWetOnly", e1);
+    CHECK_MSG (e1 < 1e-6, "Dry/Wet 100% must equal Wet Only");
+    ParamSet half = p; half[Mix] = 50;
+    ParamSet legacy = p; // default mix = 50 -> identical to the pre-mix build
+    auto d = render (half, in), e = render (legacy, in);
+    double e2 = 0; for (size_t i = 0; i < in.size(); ++i) e2 = std::max (e2, (double) std::abs (d.L[i] - e.L[i]));
+    CHECK (e2 == 0.0);
+    // Wet Only overrides the blend but keeps it: wet at full level regardless of the stored mix
+    ParamSet wo35 = wetOnly; wo35[Mix] = 35;
+    auto f = render (wo35, in);
+    double e3 = 0; for (size_t i = 0; i < in.size(); ++i) e3 = std::max (e3, (double) std::abs (f.L[i] - c.L[i]));
+    CHECK (e3 < 1e-6);
 }

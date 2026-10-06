@@ -15,14 +15,14 @@ set(PA_PLUGIN_SOURCES
     Source/Standalone/StandaloneApp.cpp
     Source/UI/LookAndFeel.cpp
     Source/UI/Widgets.cpp
-    Source/UI/Graphs.cpp
+    Source/UI/Visuals.cpp
     Source/UI/Keyboard.cpp
     Source/UI/AdvancedPanel.cpp
     Source/UI/StandalonePanel.cpp
     Source/UI/PluginEditor.cpp)
 
 juce_add_binary_data(pa_binary_data HEADER_NAME BinaryData.h NAMESPACE BinaryData
-    SOURCES ${CMAKE_SOURCE_DIR}/Resources/Fonts/Inter-Regular.ttf ${CMAKE_SOURCE_DIR}/Resources/Fonts/Inter-Medium.ttf ${CMAKE_SOURCE_DIR}/Resources/Fonts/Inter-SemiBold.ttf ${CMAKE_SOURCE_DIR}/Resources/Fonts/Inter-Bold.ttf)
+    SOURCES ${CMAKE_SOURCE_DIR}/Resources/Fonts/Inter-Regular.ttf ${CMAKE_SOURCE_DIR}/Resources/Fonts/Inter-Medium.ttf ${CMAKE_SOURCE_DIR}/Resources/Fonts/Inter-SemiBold.ttf ${CMAKE_SOURCE_DIR}/Resources/Fonts/Inter-Bold.ttf ${CMAKE_SOURCE_DIR}/Resources/Fonts/Inter-ExtraBold.ttf ${CMAKE_SOURCE_DIR}/Resources/Fonts/Inter-Light.ttf)
 set_target_properties(pa_binary_data PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 set(PA_COMMON_DEFS

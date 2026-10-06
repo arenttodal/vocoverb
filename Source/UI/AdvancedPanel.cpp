@@ -241,36 +241,21 @@ void AdvancedPanel::build (int tab)
     content = std::make_unique<Content>();
     sectionEnabled = nullptr; sectionWhy = {};
     auto& P = proc;
-    auto method = [&P] { return (int) P.value (HarmMethod); };
     auto range = [this] (int a, int b) { for (int i = a; i <= b; ++i) addParamRow (i); };
     diagText.setVisible (false);
 
     switch (tab)
     {
         case 0:
-            addSection ("Harmony", "Shared harmony control for both engines. Notes come from the Note Source (MIDI tab).");
-            addParamRow (HarmMethod); addParamRow (Placement);
+            addSection ("Harmony", "Classic filter-bank vocoder shared by both engines. Notes come from the Note Source (MIDI tab).");
+            addParamRow (HarmEnable); addParamRow (Placement);
             addParamRow (ApplyHarmonyTo, [&P] { return (int) P.value (Routing) == 0; }, "Only used with Parallel routing (series routes harmonise the combined wet once).");
             range (Depth, NoteRelease); addParamRow (Polyphony); addParamRow (NoNotePolicy); addParamRow (Latch);
-            addSection ("Classic vocoder", "Filter-bank vocoder: log-spaced bands, rectified envelopes of the wet signal imposed on the MIDI carrier.",
-                        [method] { return method() == MethodClassic || method() == MethodFft; }, "Inactive: select Classic (carrier shape/detune are also used by FFT).");
+            addSection ("Classic vocoder", "Log-spaced bands; rectified envelopes of the wet signal are imposed on the MIDI carrier. This build uses Classic only: "
+                        "sessions saved with FFT, Resonator or Shift load as Classic, and a saved Off loads as Harmony Enable off.",
+                        [&P] { return effectiveHarmonyMethod (P.currentParams()) != 0; }, "Inactive: Harmony is off.");
             range (ClBands, ClNoise);
             sectionEnabled = nullptr;
-            addSection ("FFT vocoder", {}, [method] { return method() == MethodFft; }, "Inactive: select the FFT method.");
-            addInfo ([&P] {
-                const int q = (int) P.value (Quality);
-                const int N = FftVocoder::sizeForQuality (q, P.currentSampleRate());
-                const int L = FftVocoder::latencyForSize (N);
-                return juce::String ("STFT/WOLA: N = ") + juce::String (N) + ", hop N/4, sqrt-Hann analysis and synthesis windows, carrier phase retained. "
-                       "Latency = N + N/4 = " + juce::String (L) + " samples (" + juce::String (1000.0 * L / P.currentSampleRate(), 1) + " ms; frame work is spread over a hop), verified by test.";
-            });
-            range (FftSmooth, FftStereoLink);
-            addSection ("Tuned resonator", "Audio excites note-tuned resonances; MIDI sets their pitch. Narrow-band input may excite some notes weakly.",
-                        [method] { return method() == MethodResonator; }, "Inactive: select the Resonator method.");
-            range (RsHarmonics, RsExcite);
-            addSection ("Interval shift", "Relative transposition (played note minus Shift Reference). Interval Delay taps add their own, separate shifts.",
-                        [method] { return method() == MethodShift; }, "Inactive: select the Shift method.");
-            range (ShRef, ShLimit);
             break;
         case 1:
             addSection ("Delay engine", "Two MIDI destinations exist: Harmony (absolute carrier notes) and the Interval Pitch Driver (relative tap transposition).");
@@ -316,7 +301,9 @@ void AdvancedPanel::build (int tab)
             break;
         }
         case 4:
-            addSection ("Mix", "Dry is touched only by Dry Level and Studio alignment. Everything else acts on the wet branch.");
+            addSection ("Mix", "DRY / WET blends dry against wet (50% = both at full level). Output (Wet Level) and Dry Level are the trims the header knob no longer shows. "
+                               "Dry is touched only by Dry Level, DRY / WET and Studio alignment; everything else acts on the wet branch.");
+            addParamRow (Mix);
             range (DryLevel, InputSource);
             addParamRow (Routing);
             addParamRow (SerialSend, [&P] { return (int) P.value (Routing) != 0; }, "Only used with series routing.");

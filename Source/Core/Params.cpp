@@ -216,4 +216,16 @@ double divisionBeats (int index) noexcept
     return beats[index];
 }
 
+void migrateLegacyHarmony (ParamSet& ps) noexcept
+{
+    const int m = ps.i (HarmMethod);
+    if (m == 0) { ps[HarmEnable] = 0.0f; ps[HarmMethod] = 1.0f; }
+    else if (m != 1) ps[HarmMethod] = 1.0f;
+}
+
+int effectiveHarmonyMethod (const ParamSet& ps) noexcept
+{
+    return (ps.b (HarmEnable) && ps.i (HarmMethod) != 0) ? 1 : 0; // MethodClassic : MethodOff
+}
+
 } // namespace pa

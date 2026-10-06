@@ -17,11 +17,12 @@ Products (version 0.1.0, local evaluation builds):
 |---|---|
 | Delay | BBD character (smooth/tape time changes, age, wow/flutter, stereo/ping-pong/mono-spread); Interval (Stable and Clock, forward/reverse/alternating, output or bounded feedback cascade, up to 3 taps) |
 | Reverb | Plate (Dattorro-topology tank); Wash (16-line modulated FDN, bloom); freeze for both |
-| Harmony | Off, Classic filter-bank vocoder (24/32/48 bands), FFT/STFT vocoder, Tuned Resonator, Interval Shift |
+| Harmony | Classic filter-bank vocoder (24/32/48 bands) with on/off. Since the GUI v2 revision the build is Classic-only: saved FFT/Resonator/Shift states load as Classic (see `docs/GUI-Implementation-Note.md`) |
 | Placement / routing | After Space / Before Space; Parallel, Delay → Reverb, Reverb → Delay |
 | Notes | MIDI + on-screen keys, stored chord (8 snapshots), interval bank (chromatic/scale), arpeggiator |
 | Performance | Latch, sustain, note attack/release, transition (crossfade/glide), ducking, wet-only, panic, tail kill |
 | Comparison | A/B with loudness match, 16 factory presets, repeatable experiments, offline audition export |
+| Editor | Approved 1536 x 1024 design (`references/playable-ambience-approved-gui.png`), uniformly scalable; header DRY / WET; evidence in `design/visual-validation/` |
 
 ## Build
 ```

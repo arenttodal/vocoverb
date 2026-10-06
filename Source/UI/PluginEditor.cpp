@@ -6,151 +6,267 @@
 
 namespace pa
 {
+namespace
+{
+/** Draws `text` with its capital letters starting at canvas y `capTop` (baseline = capTop + cap height). */
+void capText (juce::Graphics& g, const juce::String& text, const juce::Font& f, float x, float capTop, float capPx, juce::Justification j = juce::Justification::left, float width = 0.0f)
+{
+    g.setFont (f);
+    if (j == juce::Justification::left) { g.drawSingleLineText (text, (int) std::lround (x), (int) std::lround (capTop + capPx)); return; }
+    const float w = juce::GlyphArrangement::getStringWidth (f, text);
+    const float x0 = j == juce::Justification::horizontallyCentred ? x + (width - w) * 0.5f : x + width - w;
+    juce::GlyphArrangement ga;
+    ga.addLineOfText (f, text, x0, capTop + capPx);
+    ga.draw (g);
+}
+
+/** Letter spacing (kerning factor) that makes `text` exactly `targetW` wide in font `f`. */
+float trackingToFit (juce::Font f, const juce::String& text, float targetW)
+{
+    const float w0 = juce::GlyphArrangement::getStringWidth (f.withExtraKerningFactor (0.0f), text);
+    const int gaps = std::max (1, text.length() - 1);
+    return (targetW - w0) / ((float) gaps * f.getHeight());
+}
+
+/** Text button with an icon at its left (ADVANCED). */
+class IconTextButton : public juce::TextButton
+{
+public:
+    IconTextButton (const juce::String& t, IconButton::Icon i) : juce::TextButton (t), icon (i) {}
+    void paintButton (juce::Graphics& g, bool highlighted, bool down) override
+    {
+        getLookAndFeel().drawButtonBackground (g, *this, {}, highlighted, down);
+        const auto c = isEnabled() ? theme::text : theme::textDisabled;
+        IconButton::drawIcon (g, icon, juce::Rectangle<float> (24.0f, 22.0f).withCentre ({ 27.0f, (float) getHeight() * 0.5f }), c, false, 1.6f);
+        g.setColour (c);
+        g.setFont (theme::capFont (10.0f, 1));
+        g.drawText (getButtonText(), getLocalBounds().withTrimmedLeft (52).withTrimmedRight (6), juce::Justification::centredLeft);
+    }
+
+private:
+    IconButton::Icon icon;
+};
+
+/** Transparent text button (preset name). */
+class PlainTextButton : public juce::Button
+{
+public:
+    PlainTextButton() : juce::Button ("Preset") {}
+    void paintButton (juce::Graphics& g, bool highlighted, bool) override
+    {
+        if (highlighted) { g.setColour (juce::Colours::white.withAlpha (0.25f)); g.fillRect (getLocalBounds()); }
+        g.setColour (theme::text);
+        capText (g, getButtonText(), theme::capFont (10.8f, 1), 7.0f, (float) getHeight() * 0.5f - 5.5f, 10.5f, juce::Justification::horizontallyCentred, (float) getWidth());
+    }
+};
+
+/** C MINOR badge: shows the voiced chord; opens the source settings (chord / intervals / arp editing). */
+class ChordBadge : public juce::Button
+{
+public:
+    ChordBadge() : juce::Button ("Chord") { setTooltip ("Voiced chord. Click to edit the stored chord, intervals or arpeggiator"); }
+    juce::String text;
+    void paintButton (juce::Graphics& g, bool highlighted, bool down) override
+    {
+        auto r = getLocalBounds().toFloat().reduced (0.5f);
+        paintField (g, r, 6.0f, true, highlighted);
+        if (down) { g.setColour (juce::Colours::black.withAlpha (0.06f)); g.fillRoundedRectangle (r, 6.0f); }
+        g.setColour (isEnabled() ? theme::text : theme::textDisabled);
+        const auto f = theme::capFont (10.0f, 1, 0.06f);
+        capText (g, text, f, 0.0f, r.getCentreY() - 5.0f, 10.0f, juce::Justification::horizontallyCentred, (float) getWidth());
+    }
+};
+
+/** Source-specific settings shown in a call-out from the chord badge (all former source-bar controls). */
+class SourceSettings : public juce::Component
+{
+public:
+    explicit SourceSettings (PluginProcessor& p)
+        : proc (p), chRoot (p, ChRoot), chQuality (p, ChQuality), chSpread (p, ChSpread), intRef (p, IntRefSource), intMode (p, IntMode), intKey (p, IntKey),
+          intScale (p, IntScale), arpMode (p, ArpMode), arpRate (p, ArpRate), chOct (p, ChOctave), chInv (p, ChInversion), intRoot (p, IntRoot), intCount (p, IntCount),
+          arpOct (p, ArpOctaves), arpSync (p, ArpSync, "SYNC"), policy (&p, NoNotePolicy, { "HOLD LAST", "RELEASE", "AMBIENT" })
+    {
+        src = (int) p.value (NoteSource);
+        intRoot.prefix = "ROOT"; chOct.prefix = "OCT"; chInv.prefix = "INV"; intCount.prefix = "COUNT"; arpOct.prefix = "OCT";
+        for (int i = 0; i < 8; ++i)
+        {
+            snap[i].setButtonText (juce::String (i + 1));
+            snap[i].setTooltip ("Chord snapshot " + juce::String (i + 1) + " (click to recall; arm STORE first; MIDI Program Change " + juce::String (i) + ")");
+            snap[i].onClick = [this, i] {
+                if (storeArm.getToggleState()) { proc.storeSnapshot (i); storeArm.setToggleState (false, juce::dontSendNotification); }
+                else proc.recallSnapshot (i);
+            };
+        }
+        storeArm.setClickingTogglesState (true);
+        storeArm.setTooltip ("Arm, then click a snapshot number to store the current chord into it");
+        arpGate.setSliderStyle (juce::Slider::LinearHorizontal);
+        arpGate.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
+        arpGateAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, paramInfo (ArpGate).id, arpGate);
+        arpGate.setTooltip ("Arp gate length");
+        switch (src)
+        {
+            case 1: for (juce::Component* c : std::initializer_list<juce::Component*> { &chRoot, &chQuality, &chOct, &chInv, &chSpread, &storeArm }) addAndMakeVisible (c);
+                    for (auto& s : snap) addAndMakeVisible (s);
+                    title = "STORED CHORD"; break;
+            case 2: for (juce::Component* c : std::initializer_list<juce::Component*> { &intRoot, &intRef, &intMode, &intKey, &intScale, &intCount }) addAndMakeVisible (c);
+                    title = "INTERVALS  (offsets: Advanced > MIDI)"; break;
+            case 3: for (juce::Component* c : std::initializer_list<juce::Component*> { &arpMode, &arpRate, &arpSync, &arpOct, &arpGate }) addAndMakeVisible (c);
+                    title = "ARPEGGIATOR"; break;
+            default: addAndMakeVisible (policy); title = "MIDI  -  what happens when no keys are held"; break;
+        }
+        setSize (600, 96);
+    }
+    void paint (juce::Graphics& g) override
+    {
+        g.setColour (theme::textMuted);
+        g.setFont (theme::capFont (8.5f, 1, 0.08f));
+        g.drawText (title, getLocalBounds().removeFromTop (24).reduced (12, 0), juce::Justification::centredLeft);
+    }
+    void resized() override
+    {
+        auto r = getLocalBounds().reduced (12, 0).withTrimmedTop (26);
+        auto row = r.removeFromTop (30);
+        auto place = [&row] (juce::Component& c, int w) { c.setBounds (row.removeFromLeft (std::min (w, row.getWidth())).reduced (0, 1)); row.removeFromLeft (6); };
+        switch (src)
+        {
+            case 1:
+                place (chRoot, 70); place (chQuality, 100); place (chOct, 92); place (chInv, 86); place (chSpread, 92);
+                row = r.withTrimmedTop (6).removeFromTop (28);
+                for (auto& s : snap) place (s, 30);
+                place (storeArm, 66);
+                break;
+            case 2: place (intRoot, 112); place (intRef, 120); place (intMode, 104); place (intKey, 60); place (intScale, 150); break;
+            case 3: place (arpMode, 110); place (arpRate, 76); place (arpSync, 60); place (arpOct, 90); place (arpGate, 150); break;
+            default: place (policy, 330); break;
+        }
+        if (src == 2) { row = r.withTrimmedTop (6).removeFromTop (28); place (intCount, 104); }
+    }
+
+private:
+    PluginProcessor& proc;
+    int src = 0;
+    juce::String title;
+    ParamCombo chRoot, chQuality, chSpread, intRef, intMode, intKey, intScale, arpMode, arpRate;
+    ParamStepper chOct, chInv, intRoot, intCount, arpOct;
+    ParamToggleButton arpSync;
+    Segmented policy;
+    juce::TextButton snap[8], storeArm { "STORE" };
+    juce::Slider arpGate;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> arpGateAttach;
+};
+} // namespace
+
 // ======================================================================================== MainView
 class MainView : public juce::Component
 {
 public:
     MainView (PluginProcessor& p, PluginEditor& e);
-    int layout (int width);           // returns preferred height
-    int availableHeight = 0;          // viewport height; extra space grows the cards
     void paint (juce::Graphics&) override;
-    void resized() override { layout (getWidth()); }
+    void resized() override;
     void update();                    // ~30 Hz
     void refreshPresetName();
+    void setReferenceFixture (bool on) { fixtureMode = on; dGraph.setReferenceFixture (on); rGraph.setReferenceFixture (on); hGraph.setReferenceFixture (on); }
 
     LevelMeter inMeter { "IN" }, outMeter { "OUT" };
 
 private:
     void showPresetMenu();
     void savePresetDialog();
-    void layoutSourceBar (juce::Rectangle<int> r);
     void bindModeKnobs();
-    void paintCardHeader (juce::Graphics& g, juce::Rectangle<int> card, const juce::String& title, const juce::String& subtitle);
+    void paintStatic (juce::Graphics& g);
+    juce::String midiStatusText() const;
 
     PluginProcessor& proc;
     PluginEditor& editor;
+    CaptureClock clock;
+    bool fixtureMode = false;
 
     // header
     IconButton prevPreset { IconButton::Icon::Prev, "Previous preset" }, nextPreset { IconButton::Icon::Next, "Next preset" },
         heart { IconButton::Icon::Heart, "Favourite this preset" }, loadBtn { IconButton::Icon::Folder, "Load a preset file" },
-        saveBtn { IconButton::Icon::Save, "Save user preset" }, gearBtn { IconButton::Icon::Gear, "Mix, timing and quality settings" };
-    juce::TextButton presetName;
+        saveBtn { IconButton::Icon::Save, "Save user preset" }, gearBtn { IconButton::Icon::Gear, "Settings: mix, output and dry levels, timing, quality, diagnostics" };
+    PlainTextButton presetName;
     Segmented abSeg { nullptr, -1, { "A", "B" } };
-    ParamKnob output;
+    ParamKnob mixKnob;
 
     // delay
     EnableDot dDot;
-    Segmented dMode;
-    IconButton dMenu { IconButton::Icon::Kebab, "Delay advanced settings" };
-    DelayGraph dGraph;
+    ParamCombo dMode;
+    IconButton dMenu { IconButton::Icon::Kebab, "Delay settings (all BBD / Interval parameters, freeze)" };
+    DelayView dGraph;
     ParamToggleButton bbdSync, ivSync;
-    Segmented ivPitch, ivDir;
     std::unique_ptr<ParamKnob> dk[5];
-    juce::TextButton dEnable { "ENABLE DELAY" };
 
     // reverb
     EnableDot rDot;
-    Segmented rMode;
-    IconButton rMenu { IconButton::Icon::Kebab, "Reverb advanced settings" };
-    ReverbGraph rGraph;
+    ParamCombo rMode;
+    IconButton rMenu { IconButton::Icon::Kebab, "Reverb settings (all Plate / Wash parameters)" };
+    ReverbView rGraph;
     std::unique_ptr<ParamKnob> rk[5];
-    juce::TextButton rEnable { "ENABLE REVERB" };
 
     // routing
-    Segmented routing, placement;
+    ChoiceIconButton routeParallel, routeDR, routeRD;
+    Segmented placement;
 
     // harmony
-    struct MethodDot : public juce::Component, public juce::SettableTooltipClient
-    {
-        PluginProcessor& proc; int lastMethod = 1;
-        explicit MethodDot (PluginProcessor& p) : proc (p) { setTooltip ("Harmony on/off (Off = ordinary ambience, keeps settings)"); setTitle ("Harmony on/off"); }
-        void paint (juce::Graphics& g) override
-        {
-            const bool on = proc.value (HarmMethod) > 0.5f;
-            auto r = getLocalBounds().toFloat().withSizeKeepingCentre (13.0f, 13.0f);
-            if (on) { g.setColour (theme::accent.withAlpha (0.25f)); g.fillEllipse (r.expanded (2.5f)); g.setColour (theme::accent); g.fillEllipse (r); }
-            else { g.setColour (theme::border); g.fillEllipse (r); g.setColour (theme::borderDark); g.drawEllipse (r, 1.0f); }
-        }
-        void mouseDown (const juce::MouseEvent&) override
-        {
-            const int m = (int) proc.value (HarmMethod);
-            if (m > 0) { lastMethod = m; proc.setValue (HarmMethod, 0.0f); }
-            else proc.setValue (HarmMethod, (float) lastMethod);
-        }
-    } mDot;
-    Segmented method, source;
-    IconButton hMenu { IconButton::Icon::Kebab, "Harmony advanced settings" };
-    HarmonyGraph hGraph;
+    EnableDot hDot;
+    ChordBadge chordBadge;
+    ParamCombo source;
+    ChoiceIconButton polHold, polRelease, polAmbient;
+    IconButton hMenu { IconButton::Icon::Kebab, "Harmony settings (Classic bands, envelopes, carrier, notes, MIDI)" };
+    HarmonyView hGraph;
     std::unique_ptr<ParamKnob> hk[4];
-    // source bar
-    Segmented policy;
-    ParamCombo chRoot, chQuality, chSpread, intRef, intMode, intKey, intScale, arpMode, arpRate;
-    ParamStepper chOct, chInv, intRoot, intCount, arpOct;
-    juce::TextButton snap[8], storeArm { "STORE" };
-    ParamToggleButton arpSync;
-    juce::Slider arpGate;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> arpGateAttach;
-    juce::Rectangle<int> sourceBarArea, midiLedArea;
-    juce::String sourceInfo;
+    juce::Label hint;
 
     // performance row
     Wheel pitchWheel, modWheel;
     HarmonyKeyboard keyboard;
     ParamToggleButton latch, freeze, wetOnly;
-    juce::TextButton advancedBtn { "ADVANCED" };
+    IconTextButton advancedBtn { "ADVANCED", IconButton::Icon::Sliders };
     IconButton panic { IconButton::Icon::Panic, "Panic: release all notes (latched, held, arp)" },
         tailKill { IconButton::Icon::TailKill, "Tail Kill: release notes and clear all wet tails (short fade, dry untouched)" };
 
-    // layout rectangles
-    juce::Rectangle<int> header, dCard, rCard, routeStrip, hCard, perfRow, dKnobArea, rKnobArea;
-    bool dCollapsed = false, rCollapsed = false, stacked = false;
-    int lastMidiCount = 0; float midiLed = 0.0f;
-    int lastHostNoteCount = 0; juce::uint32 lastHostNoteTicks = 0;
-    juce::String midiStatusText() const;
-    juce::String statusText, dryWetText;
-    int lastLayoutKey = -1;
+    juce::Image staticLayer;
+    float staticScale = -1.0f;
+    int lastModeKey = -1, lastHostNoteCount = 0;
+    juce::uint32 lastHostNoteTicks = 0;
 };
 
 MainView::MainView (PluginProcessor& p, PluginEditor& e)
     : proc (p), editor (e),
-      output (p, WetLevel, "OUTPUT", true),
-      dDot (p, DelayEnable, "delay"), dMode (&p, DelayMode, { "BBD", "INTERVAL" }), dGraph (p),
+      mixKnob (p, Mix, "DRY / WET", ParamKnob::Style::Header),
+      dDot (p, DelayEnable, "delay"), dMode (p, DelayMode), dGraph (p, clock),
       bbdSync (p, BbdSync, "SYNC"), ivSync (p, IvSync, "SYNC"),
-      ivPitch (&p, IvPitchMode, { "STABLE", "CLOCK" }), ivDir (&p, IvDirection, { "FWD", "REV", "ALT" }),
-      rDot (p, ReverbEnable, "reverb"), rMode (&p, ReverbMode, { "PLATE", "WASH" }), rGraph (p),
-      routing (&p, Routing, { "PARALLEL", juce::String (juce::CharPointer_UTF8 ("DELAY \xe2\x86\x92 REVERB")), juce::String (juce::CharPointer_UTF8 ("REVERB \xe2\x86\x92 DELAY")) }),
+      rDot (p, ReverbEnable, "reverb"), rMode (p, ReverbMode), rGraph (p, clock),
+      routeParallel (p, Routing, 0, IconButton::Icon::RouteParallel, "Parallel", "Parallel: delay and reverb both hear the input (two independent branches)"),
+      routeDR (p, Routing, 1, IconButton::Icon::RouteDR, juce::String (juce::CharPointer_UTF8 ("Delay \xe2\x86\x92 Reverb")), juce::String (juce::CharPointer_UTF8 ("Delay \xe2\x86\x92 Reverb: the delay feeds the reverb"))),
+      routeRD (p, Routing, 2, IconButton::Icon::RouteRD, juce::String (juce::CharPointer_UTF8 ("Reverb \xe2\x86\x92 Delay")), juce::String (juce::CharPointer_UTF8 ("Reverb \xe2\x86\x92 Delay: the reverb feeds the delay"))),
       placement (&p, Placement, { "AFTER SPACE", "BEFORE SPACE" }),
-      mDot (p),
-      method (&p, HarmMethod, { "OFF", "CLASSIC", "FFT", "RESONATOR", "SHIFT" }),
-      source (&p, NoteSource, { "MIDI", "CHORD", "INTERVALS", "ARP" }),
-      hGraph (p),
-      policy (&p, NoNotePolicy, { "HOLD LAST", "RELEASE", "AMBIENT" }),
-      chRoot (p, ChRoot), chQuality (p, ChQuality), chSpread (p, ChSpread), intRef (p, IntRefSource), intMode (p, IntMode), intKey (p, IntKey), intScale (p, IntScale),
-      arpMode (p, ArpMode), arpRate (p, ArpRate),
-      chOct (p, ChOctave), chInv (p, ChInversion), intRoot (p, IntRoot), intCount (p, IntCount), arpOct (p, ArpOctaves),
-      arpSync (p, ArpSync, "SYNC"),
+      hDot (p, HarmEnable, "harmony"),
+      source (p, NoteSource),
+      polHold (p, NoNotePolicy, 0, IconButton::Icon::Pin, "Hold Last", "Hold Last: with no keys held, the last chord keeps sounding"),
+      polRelease (p, NoNotePolicy, 1, IconButton::Icon::Wave, "Release", "Release: with no keys held, the voices fade out (Note Release)"),
+      polAmbient (p, NoNotePolicy, 2, IconButton::Icon::Cloud, "Ambient", "Ambient: with no keys held, the wet returns to ordinary ambience"),
+      hGraph (p, clock),
       pitchWheel (p, true), modWheel (p, false), keyboard (p),
       latch (p, Latch, "LATCH"), freeze (p, Freeze, "FREEZE"), wetOnly (p, WetOnly, "WET ONLY")
 {
-    for (juce::Component* c : std::initializer_list<juce::Component*> { &prevPreset, &nextPreset, &heart, &loadBtn, &saveBtn, &gearBtn, &presetName, &abSeg, &output,
-                                &inMeter, &outMeter,
-                                &dDot, &dMode, &dMenu, &dGraph, &bbdSync, &ivSync, &ivPitch, &ivDir, &dEnable,
-                                &rDot, &rMode, &rMenu, &rGraph, &rEnable, &routing, &placement,
-                                &mDot, &method, &source, &hMenu, &hGraph, &policy,
-                                &chRoot, &chQuality, &chSpread, &intRef, &intMode, &intKey, &intScale, &arpMode, &arpRate,
-                                &chOct, &chInv, &intRoot, &intCount, &arpOct, &storeArm, &arpSync, &arpGate,
+    setOpaque (true);
+    for (juce::Component* c : std::initializer_list<juce::Component*> { &prevPreset, &nextPreset, &heart, &loadBtn, &saveBtn, &gearBtn, &presetName, &abSeg, &mixKnob,
+                                &inMeter, &outMeter, &dDot, &dMode, &dMenu, &dGraph, &bbdSync, &ivSync, &rDot, &rMode, &rMenu, &rGraph,
+                                &routeParallel, &routeDR, &routeRD, &placement, &hDot, &chordBadge, &source, &polHold, &polRelease, &polAmbient, &hMenu, &hGraph, &hint,
                                 &pitchWheel, &modWheel, &keyboard, &latch, &freeze, &wetOnly, &advancedBtn, &panic, &tailKill })
         addAndMakeVisible (c);
 
     const int dInit[5] = { BbdTime, BbdFeedback, BbdTone, BbdAge, BbdLevel };
     const char* dNames[5] = { "Time", "Feedback", "Tone", "Age", "Level" };
-    for (int i = 0; i < 5; ++i) { dk[i] = std::make_unique<ParamKnob> (p, dInit[i], dNames[i]); addAndMakeVisible (*dk[i]); }
+    for (int i = 0; i < 5; ++i) { dk[i] = std::make_unique<ParamKnob> (p, dInit[i], dNames[i], ParamKnob::Style::Engine); addAndMakeVisible (*dk[i]); }
     const int rInit[5] = { WaDecay, WaBloom, WaTone, WaMotion, WaLevel };
     const char* rNames[5] = { "Decay", "Bloom", "Tone", "Motion", "Level" };
-    for (int i = 0; i < 5; ++i) { rk[i] = std::make_unique<ParamKnob> (p, rInit[i], rNames[i]); addAndMakeVisible (*rk[i]); }
+    for (int i = 0; i < 5; ++i) { rk[i] = std::make_unique<ParamKnob> (p, rInit[i], rNames[i], ParamKnob::Style::Engine); addAndMakeVisible (*rk[i]); }
     const int hInit[4] = { Depth, Colour, Transition, DuckAmount };
     const char* hNames[4] = { "Depth", "Colour", "Transition", "Duck" };
-    for (int i = 0; i < 4; ++i) { hk[i] = std::make_unique<ParamKnob> (p, hInit[i], hNames[i]); addAndMakeVisible (*hk[i]); }
+    for (int i = 0; i < 4; ++i) { hk[i] = std::make_unique<ParamKnob> (p, hInit[i], hNames[i], ParamKnob::Style::Engine); hk[i]->getProperties().set ("boxDy", -5); addAndMakeVisible (*hk[i]); }
 
     prevPreset.onClick = [this] { proc.presets().step (-1); refreshPresetName(); };
     nextPreset.onClick = [this] { proc.presets().step (1); refreshPresetName(); };
@@ -168,49 +284,55 @@ MainView::MainView (PluginProcessor& p, PluginEditor& e)
     };
     saveBtn.onClick = [this] { savePresetDialog(); };
     gearBtn.onClick = [this] { editor.openAdvanced ("Mix / Timing"); };
+    for (auto* b : { &loadBtn, &saveBtn, &gearBtn }) b->getProperties().set ("stroke", 2.3f);
+    for (auto* b : { &prevPreset, &nextPreset }) { b->getProperties().set ("stroke", 1.9f); b->getProperties().set ("iconSize", 30.0f); b->getProperties().set ("stroke", 2.2f); }
+    heart.getProperties().set ("stroke", 1.8f); heart.getProperties().set ("iconSize", 27.0f);
+    loadBtn.getProperties().set ("iconSize", 30.0f); saveBtn.getProperties().set ("iconSize", 29.0f); gearBtn.getProperties().set ("iconSize", 31.0f);
     abSeg.onSelect = [this] (int s) { proc.presets().switchAB (s); refreshPresetName(); };
-    abSeg.setTooltip ("A/B comparison of complete states (Advanced > Mix / Timing for copy, loudness match, clear tail)");
+    abSeg.setTooltip ("A/B comparison of complete states (Settings > Mix / Timing for copy, loudness match, clear tail)");
     abSeg.setTitle ("A/B slot");
     abSeg.setSelected (proc.presets().abSlot(), false);
-    output.slider.setTooltip ("OUTPUT = wet return level (ambience only). Dry level is in Advanced > Mix / Timing and is never changed by this knob.");
+    abSeg.setFontHeight (10.0f);
+    mixKnob.slider.setTooltip ("DRY / WET: overall blend. 50% keeps dry and wet at their full levels; 0% = dry only, 100% = wet only. "
+                               "Output (wet) and dry trims are in Settings > Mix / Timing.");
 
     dMenu.onClick = [this] { editor.openAdvanced ("Delay"); };
     rMenu.onClick = [this] { editor.openAdvanced ("Reverb"); };
     hMenu.onClick = [this] { editor.openAdvanced ("Harmony"); };
-    dEnable.onClick = [this] { proc.setValue (DelayEnable, 1.0f); };
-    rEnable.onClick = [this] { proc.setValue (ReverbEnable, 1.0f); };
+    for (auto* m : { &dMenu, &rMenu, &hMenu }) m->getProperties().set ("stroke", 1.6f);
+    for (auto* c : { &dMode, &rMode }) c->getProperties().set ("textInset", 17);
+    source.getProperties().set ("textInset", 14);
     advancedBtn.onClick = [this] { editor.openAdvanced (proc.uiAdvancedTab); };
-    advancedBtn.setTooltip ("All settings with help text: method details, MIDI, arp, timing, A/B, diagnostics");
+    advancedBtn.setTooltip ("All settings with help text: Classic details, MIDI, arp, timing, A/B, diagnostics");
     panic.onClick = [this] { proc.panic(); };
     tailKill.onClick = [this] { proc.tailKill(); };
-    latch.setTooltip ("LATCH holds the played harmony after key-up (harmony state). Separate from FREEZE.");
+    panic.setTitle ("Panic: all notes off"); tailKill.setTitle ("Tail kill: clear wet tails");
+    for (auto* b : { &panic, &tailKill }) b->getProperties().set ("stroke", 1.9f);
+    latch.setTooltip ("LATCH holds the played harmony after key-up (harmony state). Separate from FREEZE and from the Hold Last policy.");
     freeze.setTooltip ("FREEZE holds the audio ambience (never creates sound by itself). Chords can still change over it in After Space.");
-    wetOnly.setTooltip ("WET ONLY removes the dry signal completely (use on return tracks)");
-
-    for (int i = 0; i < 8; ++i)
+    wetOnly.setTooltip ("WET ONLY removes the dry signal completely (return tracks). It overrides DRY / WET and keeps its value.");
+    for (juce::Button* b : std::initializer_list<juce::Button*> { &latch, &freeze, &wetOnly, &advancedBtn, &bbdSync, &ivSync })
+        b->getProperties().set ("radius", 6.0f);
+    bbdSync.getProperties().set ("capPx", 9.5f); ivSync.getProperties().set ("capPx", 9.5f);
+    for (auto* b : { &routeParallel, &routeDR, &routeRD })
     {
-        snap[i].setButtonText (juce::String (i + 1));
-        snap[i].setTooltip ("Chord snapshot " + juce::String (i + 1) + " (click to recall; arm STORE first to save; MIDI Program Change " + juce::String (i) + ")");
-        snap[i].onClick = [this, i] {
-            if (storeArm.getToggleState()) { proc.storeSnapshot (i); storeArm.setToggleState (false, juce::dontSendNotification); }
-            else proc.recallSnapshot (i);
-        };
-        addAndMakeVisible (snap[i]);
+        b->getProperties().set ("iconBox", true);
+        b->getProperties().set ("stroke", 1.6f);
     }
-    storeArm.setClickingTogglesState (true);
-    storeArm.setTooltip ("Arm, then click a snapshot number to store the current chord into it");
-    arpGate.setSliderStyle (juce::Slider::LinearHorizontal);
-    arpGate.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
-    arpGateAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, paramInfo (ArpGate).id, arpGate);
-    arpGate.setTooltip ("Arp gate length");
-    intRoot.prefix = "ROOT"; chOct.prefix = "OCT"; chInv.prefix = "INV"; intCount.prefix = "COUNT"; arpOct.prefix = "OCT";
-    method.setFontHeight (11.5f);
-    source.setFontHeight (11.5f);
-    routing.setFontHeight (11.5f);
-    placement.setFontHeight (11.5f);
-    policy.setFontHeight (11.0f);
-    ivPitch.setFontHeight (10.5f);
-    ivDir.setFontHeight (10.5f);
+    routeParallel.getProperties().set ("iconW", 74.0f); routeParallel.getProperties().set ("iconH", 34.0f);
+    for (auto* b : { &routeDR, &routeRD }) { b->getProperties().set ("iconW", 84.0f); b->getProperties().set ("iconH", 26.0f); }
+    for (auto* b : { &polHold, &polRelease, &polAmbient }) { b->getProperties().set ("iconBox", true); b->getProperties().set ("iconW", 24.0f); b->getProperties().set ("iconH", 24.0f); b->getProperties().set ("stroke", 1.8f); }
+    placement.setFontHeight (9.0f);
+    placement.getProperties().set ("firstFraction", 183.0 / 379.0); // AFTER SPACE | BEFORE SPACE split at x 1177
+    chordBadge.onClick = [this] {
+        auto content = std::make_unique<SourceSettings> (proc);
+        juce::CallOutBox::launchAsynchronously (std::move (content), chordBadge.getScreenBounds(), nullptr);
+    };
+    hint.setColour (juce::Label::textColourId, theme::displayLabel.withAlpha (0.8f));
+    hint.setFont (theme::capFont (8.0f, 1, 0.04f));
+    hint.setJustificationType (juce::Justification::centredRight);
+    hint.setInterceptsMouseClicks (false, false);
+    keyboard.setRange (36, 29); // C2 .. C6
     refreshPresetName();
     bindModeKnobs();
 }
@@ -221,6 +343,7 @@ void MainView::refreshPresetName()
     presetName.setButtonText (n);
     heart.setFilled (proc.presets().isFavourite (n));
     abSeg.setSelected (proc.presets().abSlot(), false);
+    repaint();
 }
 
 void MainView::showPresetMenu()
@@ -272,6 +395,7 @@ void MainView::savePresetDialog()
     }), true);
 }
 
+
 void MainView::bindModeKnobs()
 {
     const bool interval = proc.value (DelayMode) > 0.5f;
@@ -291,341 +415,171 @@ void MainView::bindModeKnobs()
         dk[3]->bind (BbdAge, "Age");
         dk[4]->bind (BbdLevel, "Level");
     }
-    bbdSync.setVisible (! interval && ! dCollapsed);
-    ivSync.setVisible (interval && ! dCollapsed);
-    ivPitch.setVisible (interval && ! dCollapsed);
-    ivDir.setVisible (interval && ! dCollapsed);
+    bbdSync.setVisible (! interval);
+    ivSync.setVisible (interval);
     const bool wash = proc.value (ReverbMode) > 0.5f;
-    if (wash)
-    {
-        rk[0]->bind (WaDecay, "Decay"); rk[1]->bind (WaBloom, "Bloom"); rk[2]->bind (WaTone, "Tone"); rk[3]->bind (WaMotion, "Motion"); rk[4]->bind (WaLevel, "Level");
-    }
-    else
-    {
-        rk[0]->bind (PlDecay, "Decay"); rk[1]->bind (PlPredelay, "Pre-delay"); rk[2]->bind (PlTone, "Tone"); rk[3]->bind (PlMotion, "Motion"); rk[4]->bind (PlLevel, "Level");
-    }
+    if (wash) { rk[0]->bind (WaDecay, "Decay"); rk[1]->bind (WaBloom, "Bloom"); rk[2]->bind (WaTone, "Tone"); rk[3]->bind (WaMotion, "Motion"); rk[4]->bind (WaLevel, "Level"); }
+    else { rk[0]->bind (PlDecay, "Decay"); rk[1]->bind (PlPredelay, "Pre-delay"); rk[2]->bind (PlTone, "Tone"); rk[3]->bind (PlMotion, "Motion"); rk[4]->bind (PlLevel, "Level"); }
 }
 
-int MainView::layout (int width)
+void MainView::resized()
 {
-    const bool standaloneUnused = false; juce::ignoreUnused (standaloneUnused);
-    const int m = 14;
-    int y = m;
-    const bool dOn = proc.value (DelayEnable) > 0.5f, rOn = proc.value (ReverbEnable) > 0.5f;
-    dCollapsed = ! dOn && rOn;
-    rCollapsed = ! rOn && dOn;
-    stacked = width < 1120;
-    header = { m, y, width - 2 * m, 70 };
-    y += 70 + 6;
-    const int baseTotal = stacked ? 1194 : 846;
-    const int extra = juce::jlimit (0, 600, availableHeight - baseTotal);
-    const int cardH = 340 + (stacked ? extra / 3 : extra * 6 / 10);
-    const int harmH = 236 + (stacked ? extra / 3 : extra * 4 / 10);
-    if (stacked)
-    {
-        dCard = { m, y, width - 2 * m, dCollapsed ? 60 : cardH };
-        y += dCard.getHeight() + 8;
-        rCard = { m, y, width - 2 * m, rCollapsed ? 60 : cardH };
-        y += rCard.getHeight() + 6;
-    }
-    else
-    {
-        const int full = width - 2 * m, gap = 10;
-        int dw = (full - gap) / 2;
-        if (dCollapsed) dw = 150;
-        else if (rCollapsed) dw = full - gap - 150;
-        dCard = { m, y, dw, cardH };
-        rCard = { m + dw + gap, y, full - dw - gap, cardH };
-        y += cardH + 6;
-    }
-    routeStrip = { m, y, width - 2 * m, 42 };
-    y += 42 + 6;
-    hCard = { m, y, width - 2 * m, harmH };
-    y += harmH + 6;
-    perfRow = { m, y, width - 2 * m, 106 };
-    y += 106 + m;
-
-    // ---- header
-    {
-        auto h = header.reduced (10, 6);
-        auto right = h.removeFromRight (360);
-        output.setBounds (right.removeFromRight (78));
-        right.removeFromRight (10);
-        outMeter.setBounds (right.removeFromRight (34).withTrimmedTop (4).withTrimmedBottom (4));
-        inMeter.setBounds (right.removeFromRight (34).withTrimmedTop (4).withTrimmedBottom (4));
-        right.removeFromRight (10);
-        abSeg.setBounds (right.removeFromRight (64).withSizeKeepingCentre (64, 28));
-        right.removeFromRight (10);
-        gearBtn.setBounds (right.removeFromRight (34).withSizeKeepingCentre (32, 32));
-        right.removeFromRight (4);
-        saveBtn.setBounds (right.removeFromRight (34).withSizeKeepingCentre (32, 32));
-        right.removeFromRight (2);
-        loadBtn.setBounds (right.removeFromRight (34).withSizeKeepingCentre (32, 32));
-        const int titleW = width < 1150 ? 250 : 330;
-        auto avail = h.withTrimmedLeft (titleW);
-        auto mid = avail.withSizeKeepingCentre (std::min (380, avail.getWidth() - 10), 44);
-        prevPreset.setBounds (mid.removeFromLeft (40));
-        nextPreset.setBounds (mid.removeFromRight (40));
-        heart.setBounds (mid.removeFromRight (36).reduced (4));
-        presetName.setBounds (mid);
-    }
-
-    // ---- delay card
-    auto cardInner = [] (juce::Rectangle<int> c) { return c.reduced (14, 10); };
-    {
-        auto c = cardInner (dCard);
-        auto top = c.removeFromTop (34);
-        dDot.setBounds (top.removeFromLeft (22));
-        const bool collapsedNarrow = dCollapsed && ! stacked;
-        dMenu.setBounds (top.removeFromRight (28));
-        if (! collapsedNarrow && ! dCollapsed) dMode.setBounds (top.removeFromRight (std::min (260, top.getWidth() / 2)).reduced (0, 2));
-        else dMode.setBounds ({});
-        const bool showBody = ! dCollapsed;
-        dGraph.setVisible (showBody);
-        for (auto& k : dk) k->setVisible (showBody);
-        dEnable.setVisible (dCollapsed);
-        if (dCollapsed)
-        {
-            dEnable.setBounds (collapsedNarrow ? c.withSizeKeepingCentre (118, 34).withY (c.getY() + 60) : c.withSizeKeepingCentre (160, 30));
-        }
-        else
-        {
-            c.removeFromTop (6);
-            auto knobs = c.removeFromBottom (118);
-            dKnobArea = knobs;
-            dGraph.setBounds (c.withTrimmedBottom (8));
-            const int kw = knobs.getWidth() / 5;
-            for (int i = 0; i < 5; ++i) dk[i]->setBounds (knobs.removeFromLeft (kw).reduced (4, 0));
-            auto g = dGraph.getBounds().reduced (10, 8);
-            auto pills = g.removeFromTop (22);
-            bbdSync.setBounds (pills.removeFromRight (52));
-            ivSync.setBounds (bbdSync.getBounds());
-            pills.removeFromRight (6);
-            ivDir.setBounds (pills.removeFromRight (120));
-            pills.removeFromRight (6);
-            ivPitch.setBounds (pills.removeFromRight (120));
-        }
-    }
-    // ---- reverb card
-    {
-        auto c = cardInner (rCard);
-        auto top = c.removeFromTop (34);
-        rDot.setBounds (top.removeFromLeft (22));
-        rMenu.setBounds (top.removeFromRight (28));
-        if (! rCollapsed) rMode.setBounds (top.removeFromRight (std::min (260, top.getWidth() / 2)).reduced (0, 2));
-        else rMode.setBounds ({});
-        rGraph.setVisible (! rCollapsed);
-        for (auto& k : rk) k->setVisible (! rCollapsed);
-        rEnable.setVisible (rCollapsed);
-        if (rCollapsed)
-            rEnable.setBounds (! stacked ? c.withSizeKeepingCentre (118, 34).withY (c.getY() + 60) : c.withSizeKeepingCentre (160, 30));
-        else
-        {
-            c.removeFromTop (6);
-            auto knobs = c.removeFromBottom (118);
-            rKnobArea = knobs;
-            rGraph.setBounds (c.withTrimmedBottom (8));
-            const int kw = knobs.getWidth() / 5;
-            for (int i = 0; i < 5; ++i) rk[i]->setBounds (knobs.removeFromLeft (kw).reduced (4, 0));
-        }
-    }
-    bindModeKnobs();
+    // ---- header (canvas coordinates of the approved reference)
+    prevPreset.setBounds (527, 36, 50, 52);
+    presetName.setBounds (577, 36, 298, 52);
+    heart.setBounds (875, 36, 52, 52);
+    nextPreset.setBounds (927, 36, 51, 52);
+    loadBtn.setBounds (juce::Rectangle<int> (36, 34).withCentre ({ 1070, 62 }));
+    saveBtn.setBounds (juce::Rectangle<int> (34, 36).withCentre ({ 1118, 62 }));
+    gearBtn.setBounds (juce::Rectangle<int> (36, 36).withCentre ({ 1167, 62 }));
+    abSeg.setBounds (1204, 45, 79, 34);
+    inMeter.setBounds (1305, 27, 36, 68);
+    outMeter.setBounds (1342, 27, 37, 68);
+    mixKnob.setBounds (1450 - ParamKnob::kHeaderCx, 55 - ParamKnob::kHeaderCy, ParamKnob::kHeaderW, ParamKnob::kHeaderH);
+    // ---- delay / reverb
+    dDot.setBounds (juce::Rectangle<int> (24, 24).withCentre ({ 55, 147 }));
+    dMode.setBounds (556, 130, 156, 34);
+    dMenu.setBounds (juce::Rectangle<int> (22, 30).withCentre ({ 736, 147 }));
+    dGraph.setBounds (42, 170, 704, 215);
+    bbdSync.setBounds (670, 182, 61, 28);
+    ivSync.setBounds (670, 182, 61, 28);
+    const int dX[5] = { 105, 245, 388, 532, 675 }, rX[5] = { 858, 1002, 1143, 1288, 1433 }, hX[4] = { 1024, 1169, 1298, 1433 };
+    for (int i = 0; i < 5; ++i) dk[i]->setBounds (dX[i] - ParamKnob::kEngineCx, 459 - ParamKnob::kEngineCy, ParamKnob::kEngineW, ParamKnob::kEngineH);
+    rDot.setBounds (juce::Rectangle<int> (24, 24).withCentre ({ 804, 147 }));
+    rMode.setBounds (1298, 130, 163, 34);
+    rMenu.setBounds (juce::Rectangle<int> (22, 30).withCentre ({ 1486, 147 }));
+    rGraph.setBounds (791, 170, 704, 215);
+    for (int i = 0; i < 5; ++i) rk[i]->setBounds (rX[i] - ParamKnob::kEngineCx, 459 - ParamKnob::kEngineCy, ParamKnob::kEngineW, ParamKnob::kEngineH);
     // ---- routing strip
-    {
-        auto s = routeStrip.reduced (12, 7);
-        const int half = s.getWidth() / 2;
-        auto left = s.removeFromLeft (half);
-        left.removeFromLeft (std::max (70, left.getWidth() / 2 - 260));
-        left.removeFromLeft (70);
-        routing.setBounds (left.removeFromLeft (std::min (380, left.getWidth())));
-        auto right = s;
-        right.removeFromLeft (std::max (90, right.getWidth() / 2 - 230));
-        placement.setBounds (right.removeFromLeft (std::min (300, right.getWidth())));
-    }
-    // ---- harmony card
-    {
-        auto c = hCard.reduced (14, 10);
-        auto top = c.removeFromTop (32);
-        mDot.setBounds (top.removeFromLeft (22));
-        hMenu.setBounds (top.removeFromRight (28));
-        source.setBounds (top.removeFromRight (std::min (330, top.getWidth() / 3)).reduced (0, 2));
-        top.removeFromRight (12);
-        top.removeFromLeft (std::min (320, top.getWidth() / 3));
-        method.setBounds (top.removeFromRight (std::min (400, top.getWidth())).reduced (0, 2));
-        c.removeFromTop (6);
-        auto knobs = c.removeFromRight (std::min (440, c.getWidth() / 3 + 20));
-        knobs.removeFromLeft (16);
-        const int kw = knobs.getWidth() / 4;
-        auto kr = knobs.withTrimmedTop (34);
-        kr = kr.withSizeKeepingCentre (kr.getWidth(), std::min (124, kr.getHeight()));
-        for (int i = 0; i < 4; ++i) hk[i]->setBounds (kr.removeFromLeft (kw).reduced (3, 0));
-        sourceBarArea = c.removeFromTop (30);
-        layoutSourceBar (sourceBarArea);
-        c.removeFromTop (4);
-        hGraph.setBounds (c);
-    }
+    routeParallel.setBounds (255, 572, 136, 43);
+    routeDR.setBounds (411, 572, 144, 43);
+    routeRD.setBounds (576, 572, 145, 43);
+    placement.setBounds (994, 574, 379, 39);
+    // ---- harmony
+    hDot.setBounds (juce::Rectangle<int> (24, 24).withCentre ({ 55, 662 }));
+    chordBadge.setBounds (825, 646, 105, 33);
+    source.setBounds (1084, 645, 132, 35);
+    polHold.setBounds (1232, 645, 62, 35);
+    polRelease.setBounds (1302, 645, 64, 35);
+    polAmbient.setBounds (1374, 645, 65, 35);
+    hMenu.setBounds (juce::Rectangle<int> (22, 30).withCentre ({ 1486, 662 }));
+    hGraph.setBounds (42, 686, 912, 160);
+    hint.setBounds (520, 690, 426, 18);
+    for (int i = 0; i < 4; ++i) hk[i]->setBounds (hX[i] - ParamKnob::kEngineCx, 768 - ParamKnob::kEngineCy, ParamKnob::kEngineW, ParamKnob::kEngineH);
     // ---- performance row
-    {
-        auto r = perfRow.reduced (12, 8);
-        auto wheels = r.removeFromLeft (84);
-        pitchWheel.setBounds (wheels.removeFromLeft (42));
-        modWheel.setBounds (wheels);
-        r.removeFromLeft (8);
-        auto btns = r.removeFromRight (std::min (300, r.getWidth() / 3));
-        r.removeFromRight (10);
-        keyboard.setBounds (r);
-        const int whites = juce::jlimit (14, 36, r.getWidth() / 28);
-        int low = 36;
-        if (whites < 22) low = 48;
-        keyboard.setRange (low, whites);
-        auto icons = btns.removeFromRight (36);
-        panic.setBounds (icons.removeFromTop (icons.getHeight() / 2).reduced (2));
-        tailKill.setBounds (icons.reduced (2));
-        btns.removeFromRight (6);
-        auto row1 = btns.removeFromTop (btns.getHeight() / 2);
-        latch.setBounds (row1.removeFromLeft (row1.getWidth() / 2).reduced (3, 4));
-        freeze.setBounds (row1.reduced (3, 4));
-        wetOnly.setBounds (btns.removeFromLeft (btns.getWidth() / 2).reduced (3, 4));
-        advancedBtn.setBounds (btns.reduced (3, 4));
-    }
-    return y;
-}
-
-void MainView::layoutSourceBar (juce::Rectangle<int> r)
-{
-    const int src = (int) proc.value (NoteSource);
-    for (juce::Component* c : std::initializer_list<juce::Component*> { &policy, &chRoot, &chQuality, &chSpread, &intRef, &intMode, &intKey, &intScale, &arpMode, &arpRate,
-                                &chOct, &chInv, &intRoot, &intCount, &arpOct, &storeArm, &arpSync, &arpGate })
-        c->setVisible (false);
-    for (auto& s : snap) s.setVisible (false);
-    auto place = [&r] (juce::Component& c, int w) { c.setVisible (true); c.setBounds (r.removeFromLeft (std::min (w, std::max (0, r.getWidth()))).reduced (0, 2)); r.removeFromLeft (6); };
-    switch (src)
-    {
-        case 0: place (policy, 300); midiLedArea = r; break;
-        case 1:
-            place (chRoot, 64); place (chQuality, 92); place (chOct, 86); place (chInv, 80); place (chSpread, 80);
-            r.removeFromLeft (4);
-            for (auto& s : snap) place (s, 26);
-            place (storeArm, 58);
-            break;
-        case 2: place (intRoot, 110); place (intRef, 108); place (intMode, 100); place (intKey, 56); place (intScale, 130); place (intCount, 96); break;
-        default: place (arpMode, 100); place (arpRate, 70); place (arpSync, 56); place (arpOct, 86); place (arpGate, 110); break;
-    }
-}
-
-void MainView::paintCardHeader (juce::Graphics& g, juce::Rectangle<int> card, const juce::String& title, const juce::String& subtitle)
-{
-    auto top = card.reduced (14, 10).removeFromTop (34).withTrimmedLeft (26);
-    g.setColour (theme::text);
-    g.setFont (theme::font (24.0f, 3));
-    g.drawText (title, top, juce::Justification::centredLeft);
-    const int tw = (int) juce::GlyphArrangement::getStringWidth (theme::font (24.0f, 3), title);
-    if (subtitle.isNotEmpty() && top.getWidth() > tw + 60)
-    {
-        g.setColour (theme::textMuted);
-        g.setFont (theme::spaced (11.0f, 0.32f, 0));
-        g.drawText (subtitle, top.withTrimmedLeft (tw + 14).withTrimmedTop (4), juce::Justification::centredLeft);
-    }
+    pitchWheel.setBounds (62 - 23, 877, 46, 100);
+    modWheel.setBounds (111 - 23, 877, 46, 100);
+    keyboard.setBounds (150, 872, 968, 111);
+    latch.setBounds (1148, 873, 136, 44);
+    freeze.setBounds (1292, 873, 141, 44);
+    wetOnly.setBounds (1148, 929, 136, 47);
+    advancedBtn.setBounds (1292, 929, 141, 47);
+    panic.setBounds (juce::Rectangle<int> (34, 34).withCentre ({ 1477, 897 }));
+    tailKill.setBounds (juce::Rectangle<int> (36, 34).withCentre ({ 1477, 952 }));
+    staticScale = -1.0f;
 }
 
 void MainView::paint (juce::Graphics& g)
 {
-    g.setGradientFill (juce::ColourGradient (theme::shellTop, 0, 0, theme::shellBottom, 0, (float) getHeight(), false));
-    g.fillAll();
-    // header
+    const float scale = std::max (1.0f, g.getInternalContext().getPhysicalPixelScaleFactor());
+    if (std::abs (scale - staticScale) > 0.01f || ! staticLayer.isValid())
     {
-        auto h = header.reduced (8, 4);
-        g.setColour (theme::text);
-        const float th = getWidth() < 1150 ? 25.0f : 34.0f;
-        g.setFont (theme::font (th, 3));
-        const int w1 = (int) juce::GlyphArrangement::getStringWidth (theme::font (th, 3), "PLAYABLE ");
-        auto t = h.removeFromTop (44);
-        g.drawText ("PLAYABLE", t, juce::Justification::bottomLeft);
-        g.setFont (theme::font (th, 0));
-        g.drawText ("AMBIENCE", t.withTrimmedLeft (w1), juce::Justification::bottomLeft);
-        g.setColour (theme::textMuted);
-        g.setFont (theme::spaced (11.5f, 0.55f, 0));
-        g.drawText ("VOCODED DELAY & REVERB", h.removeFromTop (20), juce::Justification::centredLeft);
-        // preset box
-        auto pb = presetName.getBounds().getUnion (prevPreset.getBounds()).getUnion (nextPreset.getBounds()).toFloat();
-        paintCard (g, pb, 8.0f);
-        g.setColour (theme::border);
-        g.drawVerticalLine (prevPreset.getRight(), pb.getY() + 4, pb.getBottom() - 4);
-        g.drawVerticalLine (nextPreset.getX(), pb.getY() + 4, pb.getBottom() - 4);
-        // separators
-        g.setColour (theme::border);
-        g.drawVerticalLine (abSeg.getX() - 6, (float) header.getY() + 14, (float) header.getBottom() - 14);
-        g.drawVerticalLine (inMeter.getX() - 6, (float) header.getY() + 14, (float) header.getBottom() - 14);
-        // dry/wet indicator under preset box
-        g.setColour (proc.value (WetOnly) > 0.5f ? theme::accent : theme::textMuted);
-        g.setFont (theme::spaced (10.5f, 0.18f, 2));
-        g.drawText (dryWetText, presetName.getBounds().withY (pb.toNearestInt().getBottom() + 1).withHeight (14).expanded (60, 0), juce::Justification::centred);
+        staticLayer = juce::Image (juce::Image::ARGB, (int) std::ceil (theme::kCanvasW * scale), (int) std::ceil (theme::kCanvasH * scale), true);
+        juce::Graphics sg (staticLayer);
+        sg.addTransform (juce::AffineTransform::scale (scale));
+        paintStatic (sg);
+        staticScale = scale;
+    }
+    g.drawImage (staticLayer, juce::Rectangle<float> (0, 0, (float) theme::kCanvasW, (float) theme::kCanvasH), juce::RectanglePlacement::stretchToFit);
+}
+
+void MainView::paintStatic (juce::Graphics& g)
+{
+    // backdrop and warm shell (slight spatial variation, never flat white)
+    g.setGradientFill (juce::ColourGradient (juce::Colour (0xffece7df), 0, 0, juce::Colour (0xffd8cfc2), 0, (float) theme::kCanvasH, false));
+    g.fillAll();
+    const juce::Rectangle<float> shell (15.0f, 15.0f, 1506.0f, 983.0f);
+    {
+        juce::Path p; p.addRoundedRectangle (shell, 15.0f);
+        juce::DropShadow (juce::Colour (0x26402810), 10, { 0, 3 }).drawForPath (g, p);
+        juce::ColourGradient sg (theme::shellTop, 0, shell.getY(), theme::shellBottom, 0, shell.getBottom(), false);
+        sg.addColour (0.12, juce::Colour (0xfff3ede4));
+        g.setGradientFill (sg);
+        g.fillPath (p);
+        g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.20f), shell.getCentreX(), shell.getY(), juce::Colours::white.withAlpha (0.0f),
+                                                 shell.getCentreX(), shell.getY() + 420.0f, true));
+        g.fillPath (p);
+        g.setColour (juce::Colour (0x18604830));
+        g.strokePath (p, juce::PathStrokeType (1.0f));
     }
     // cards
-    paintCard (g, dCard.toFloat());
-    paintCard (g, rCard.toFloat());
-    paintCardHeader (g, dCard, "DELAY", dCollapsed && ! stacked ? juce::String() : "ECHO & INTERVAL");
-    paintCardHeader (g, rCard, "REVERB", rCollapsed && ! stacked ? juce::String() : "SPACE & SUSTAIN");
-    auto collapsedNote = [&g] (juce::Rectangle<int> card, const juce::String& what) {
+    paintCard (g, { 22.0f, 118.0f, 743.0f, 436.0f });
+    paintCard (g, { 772.0f, 118.0f, 743.0f, 436.0f });
+    paintCard (g, { 22.0f, 563.0f, 1493.0f, 63.0f }, 12.0f);
+    paintCard (g, { 22.0f, 634.0f, 1493.0f, 225.0f });
+    paintCard (g, { 22.0f, 866.0f, 1493.0f, 121.0f });
+
+    // title: heavy PLAYABLE + light AMBIENCE on one baseline, ending near x 426
+    {
+        const float cap = 27.0f;
+        auto heavy = theme::capFont (cap, 3), light = theme::capFont (cap, 0);
+        const juce::String a ("PLAYABLE"), b ("AMBIENCE");
+        const float wa = juce::GlyphArrangement::getStringWidth (heavy, a), wb = juce::GlyphArrangement::getStringWidth (light, b);
+        const float space = 13.0f;
+        const float k = juce::jlimit (-0.05f, 0.08f, (381.0f - space - wa - wb) / (14.0f * heavy.getHeight()));
+        heavy = heavy.withExtraKerningFactor (k); light = light.withExtraKerningFactor (k);
+        g.setColour (theme::text);
+        juce::GlyphArrangement ga;
+        ga.addLineOfText (heavy, a, 45.5f, 40.0f + cap);
+        const float wa2 = juce::GlyphArrangement::getStringWidth (heavy, a);
+        ga.addLineOfText (light, b, 45.5f + wa2 + space, 40.0f + cap);
+        ga.draw (g);
+        const auto sub = theme::capFont (9.0f, 0);
+        const juce::String st ("VOCODED DELAY & REVERB");
         g.setColour (theme::textMuted);
-        g.setFont (theme::font (13.0f, 1));
-        g.drawFittedText (what + " OFF\nprocessing disabled", card.reduced (14, 10).withTrimmedTop (140).withHeight (60), juce::Justification::centredTop, 3);
-    };
-    if (dCollapsed && ! stacked) collapsedNote (dCard, "DELAY");
-    if (rCollapsed && ! stacked) collapsedNote (rCard, "REVERB");
-    // routing strip
-    paintCard (g, routeStrip.toFloat(), 10.0f);
+        capText (g, st, sub.withExtraKerningFactor (trackingToFit (sub, st, 306.0f)), 48.0f, 80.0f, 9.0f);
+    }
+    // preset bar
+    {
+        const juce::Rectangle<float> bar (527.0f, 36.0f, 451.0f, 52.0f);
+        paintField (g, bar, 8.0f, true);
+        paintField (g, { 577.5f, 37.0f, 297.0f, 50.0f }, 4.0f, true);
+        g.setColour (juce::Colour (0xffd5ccbd));
+        for (float x : { 577.0f, 875.0f, 927.0f }) g.fillRect (juce::Rectangle<float> (x - 0.5f, bar.getY() + 1.0f, 1.0f, bar.getHeight() - 2.0f));
+    }
+    // dividers
+    g.setColour (juce::Colour (0xffd6cdbf));
+    g.fillRect (juce::Rectangle<float> (1293.5f, 40.0f, 1.0f, 56.0f));
+    g.fillRect (juce::Rectangle<float> (795.0f, 574.0f, 1.0f, 39.0f));
+    g.fillRect (juce::Rectangle<float> (1133.0f, 878.0f, 1.0f, 98.0f));
+    g.setColour (juce::Colours::white.withAlpha (0.6f));
+    g.fillRect (juce::Rectangle<float> (1294.5f, 40.0f, 1.0f, 56.0f));
+    g.fillRect (juce::Rectangle<float> (796.0f, 574.0f, 1.0f, 39.0f));
+    g.fillRect (juce::Rectangle<float> (1134.0f, 878.0f, 1.0f, 98.0f));
+
+    // section titles and strip labels
     g.setColour (theme::text);
-    g.setFont (theme::spaced (12.0f, 0.12f, 2));
-    g.drawText ("ROUTING", routing.getBounds().withX (routing.getX() - 80).withWidth (74), juce::Justification::centredRight);
-    g.drawText ("PLACEMENT", placement.getBounds().withX (placement.getX() - 100).withWidth (92), juce::Justification::centredRight);
-    g.setColour (theme::border);
-    g.drawVerticalLine (routeStrip.getCentreX(), (float) routeStrip.getY() + 8, (float) routeStrip.getBottom() - 8);
-    g.setColour (theme::textMuted);
-    g.setFont (theme::font (11.5f));
-    {
-        auto st = routeStrip.reduced (12, 0);
-        auto area = st.withTrimmedLeft (placement.getRight() - st.getX() + 12);
-        g.drawFittedText (statusText, area, juce::Justification::centredRight, 2, 0.8f);
-    }
-    // harmony
-    paintCard (g, hCard.toFloat());
-    paintCardHeader (g, hCard, "HARMONY", "PLAY THE WET SIGNAL");
-    if ((int) proc.value (NoteSource) == 0 && ! midiLedArea.isEmpty())
-    {
-        auto led = midiLedArea.withSizeKeepingCentre (midiLedArea.getWidth(), 20).withTrimmedLeft (8);
-        auto dot = led.removeFromLeft (14).toFloat().withSizeKeepingCentre (9, 9);
-        g.setColour (theme::accent.withAlpha (0.2f + 0.8f * midiLed));
-        g.fillEllipse (dot);
-        g.setColour (theme::textMuted);
-        g.setFont (theme::font (11.5f));
-        g.drawText (proc.isCompanion() ? "MIDI n/a (Audio AU): use on-screen keys / CHORD" : sourceInfo, led.withTrimmedLeft (6), juce::Justification::centredLeft);
-    }
-    else if ((int) proc.value (NoteSource) == 2 && ! sourceBarArea.isEmpty())
-    {
-        g.setColour (theme::textMuted);
-        g.setFont (theme::font (11.5f));
-        g.drawText (sourceInfo, sourceBarArea.withTrimmedLeft (intCount.getRight() - sourceBarArea.getX() + 10), juce::Justification::centredLeft);
-    }
-    // performance row
-    paintCard (g, perfRow.toFloat());
+    capText (g, "DELAY", theme::capFont (18.0f, 3, 0.01f), 78.0f, 137.0f, 18.0f);
+    capText (g, "REVERB", theme::capFont (18.0f, 3, 0.0f), 827.0f, 137.0f, 18.0f);
+    capText (g, "HARMONY", theme::capFont (19.0f, 3, -0.025f), 78.0f, 652.0f, 19.0f);
+    g.setColour (theme::textLabel);
+    capText (g, "ROUTING", theme::capFont (10.0f, 1, 0.07f), 163.0f, 588.0f, 10.0f);
+    capText (g, "PLACEMENT", theme::capFont (10.0f, 1, 0.07f), 871.0f, 588.0f, 10.0f);
+    capText (g, "SOURCE", theme::capFont (9.3f, 1, 0.0f), 1016.0f, 658.0f, 9.5f);
 }
 
 juce::String MainView::midiStatusText() const
 {
     auto& t = proc.telemetry();
     const int notesIn = t.hostNoteOnCounter.load(), msgs = t.hostMidiCounter.load(), dropped = t.hostFilteredCounter.load();
-    const juce::String fmt = juce::AudioProcessor::getWrapperTypeDescription (proc.wrapperType);
+    if (proc.isCompanion()) return "Audio AU: this plug-in type receives no MIDI. Use Chord, Intervals, Arp or the on-screen keys.";
     if (notesIn > 0)
-        return "MIDI IN ch " + juce::String (t.lastHostChannel.load()) + "  last " + juce::String (paramValueToText (ShRef, (float) t.lastHostNote.load()))
-               + "  (" + juce::String (notesIn) + " notes)";
-    if (dropped > 0)
-        return "MIDI on ch " + juce::String (t.lastHostChannel.load()) + " dropped by the channel filter (Advanced > MIDI)";
-    if (msgs > 0) return "MIDI IN (" + juce::String (msgs) + " msgs, no notes yet)";
+        return "MIDI in: ch " + juce::String (t.lastHostChannel.load()) + ", last " + juce::String (paramValueToText (ShRef, (float) t.lastHostNote.load())) + " (" + juce::String (notesIn) + " notes)";
+    if (dropped > 0) return "MIDI on ch " + juce::String (t.lastHostChannel.load()) + " is dropped by the channel filter (Advanced > MIDI)";
+    if (msgs > 0) return "MIDI in: " + juce::String (msgs) + " messages, no notes yet";
     if (proc.isStandalone()) return "No MIDI yet: enable your controller in Audio / MIDI (on-screen keys always work)";
-    if (proc.wrapperType == juce::AudioProcessor::wrapperType_AudioUnit)
-        return "No MIDI yet (AU). Logic: Side Chain setup. Ableton Live: use the VST3";
-    return "No MIDI yet (" + fmt + "). Live: MIDI track > MIDI To > this track > Playable Ambience";
+    if (proc.wrapperType == juce::AudioProcessor::wrapperType_AudioUnit) return "No MIDI yet. Logic: Side Chain setup. Ableton Live: use the VST3";
+    return "No MIDI yet. Live: MIDI track > MIDI To > this track > Playable Ambience";
 }
 
 void MainView::update()
@@ -633,61 +587,61 @@ void MainView::update()
     auto& t = proc.telemetry();
     inMeter.setLevels (t.inPeakL.exchange (0.0f), t.inPeakR.exchange (0.0f));
     outMeter.setLevels (t.outPeakL.exchange (0.0f), t.outPeakR.exchange (0.0f));
-    const int mc = t.midiCounter.load();
-    if (mc != lastMidiCount) { midiLed = 1.0f; lastMidiCount = mc; } else midiLed *= 0.85f;
-    // layout changes
-    const int key = (proc.value (DelayEnable) > 0.5f ? 1 : 0) + (proc.value (ReverbEnable) > 0.5f ? 2 : 0) + (int) proc.value (NoteSource) * 4
-                    + (int) proc.value (DelayMode) * 32 + (int) proc.value (ReverbMode) * 64 + (proc.value (BbdSync) > 0.5f ? 128 : 0) + (proc.value (IvSync) > 0.5f ? 256 : 0);
-    if (key != lastLayoutKey) { lastLayoutKey = key; layout (getWidth()); repaint(); }
-    dGraph.setOverlayText (proc.value (DelayEnable) > 0.5f ? juce::String() : "DELAY OFF - click the dot to enable");
-    rGraph.setOverlayText (proc.value (ReverbEnable) > 0.5f ? juce::String() : "REVERB OFF - click the dot to enable");
-    if (dGraph.isVisible()) dGraph.update();
-    if (rGraph.isVisible()) rGraph.update();
-    hGraph.update();
+    clock.update (t, proc.currentSampleRate());
+    const int modeKey = (int) proc.value (DelayMode) + 2 * (int) proc.value (ReverbMode) + 4 * (proc.value (BbdSync) > 0.5f) + 8 * (proc.value (IvSync) > 0.5f);
+    if (modeKey != lastModeKey) { lastModeKey = modeKey; bindModeKnobs(); }
+    if (! fixtureMode)
+    {
+        dGraph.update();
+        rGraph.update();
+        hGraph.update();
+    }
     keyboard.update();
     for (auto& k : dk) k->refreshValue();
     for (auto& k : rk) k->refreshValue();
     for (auto& k : hk) k->refreshValue();
-    output.refreshValue();
-    dDot.refresh(); rDot.refresh(); mDot.repaint();
-    // harmony controls greyed when method is Off
-    const bool hOn = proc.value (HarmMethod) > 0.5f;
-    hk[0]->setEnabled (hOn); hk[1]->setEnabled (hOn); hk[2]->setEnabled (hOn);
+    mixKnob.refreshValue();
+    dDot.refresh(); rDot.refresh(); hDot.refresh();
+    // enable states: processing stays bound; disabled sections are dimmed
+    const bool dOn = proc.value (DelayEnable) > 0.5f, rOn = proc.value (ReverbEnable) > 0.5f, hOn = effectiveHarmonyMethod (proc.currentParams()) != 0;
+    dGraph.setDimmed (! dOn, "DELAY OFF - CLICK THE DOT TO ENABLE");
+    rGraph.setDimmed (! rOn, "REVERB OFF - CLICK THE DOT TO ENABLE");
+    hGraph.setDimmed (! hOn, "HARMONY OFF - ORDINARY AMBIENCE");
+    for (auto& k : dk) k->setAlpha (dOn ? 1.0f : 0.5f);
+    for (auto& k : rk) k->setAlpha (rOn ? 1.0f : 0.5f);
+    for (int i = 0; i < 3; ++i) hk[i]->setEnabled (hOn);
     placement.setEnabled (hOn);
-    // status line
-    juce::String s;
-    const int timing = (int) proc.value (Timing);
-    s << (timing == 1 ? "STUDIO " + juce::String (proc.reportedLatency()) + " smp" : "LIVE  wet +" + juce::String (t.wetLatency.load()) + " smp");
-    if (proc.latencyChangePending()) s << "  |  stop transport to apply timing/quality";
-    if (t.protectionActive.exchange (false)) s << "  |  WET LIMITER";
-    if (t.clearing.load() == 2) s << "  |  clearing tail";
-    if (t.nonfiniteCount.load() > 0) s << "  |  wet reset x" << t.nonfiniteCount.load();
-    if (proc.isCompanion()) s << "  |  Audio AU: no MIDI input";
-    else
+    const bool wo = proc.value (WetOnly) > 0.5f;
+    mixKnob.setAlpha (wo ? 0.55f : 1.0f);
+    mixKnob.slider.setTooltip (wo ? "WET ONLY is on: it overrides DRY / WET (dry removed, wet at full level). The stored blend returns when Wet Only is off."
+                                  : "DRY / WET: overall blend. 50% keeps dry and wet at their full levels; 0% = dry only, 100% = wet only. Output (wet) and dry trims: Settings > Mix / Timing.");
+    // chord badge: the voiced chord (or the stored chord for the Chord source)
     {
-        // MIDI that arrives while the note source ignores it is the most common "MIDI does nothing" cause
-        const int hn = t.hostNoteOnCounter.load();
-        if (hn != lastHostNoteCount) { lastHostNoteCount = hn; lastHostNoteTicks = juce::Time::getMillisecondCounter(); }
-        const bool recent = hn > 0 && juce::Time::getMillisecondCounter() - lastHostNoteTicks < 4000;
-        const int srcNow = (int) proc.value (NoteSource);
-        const bool ignored = srcNow == 1 || (srcNow == 2 && (int) proc.value (IntRefSource) == 0);
-        if (recent && ignored) s << "  |  MIDI notes arriving but ignored: Note Source is " << (srcNow == 1 ? "CHORD" : "INTERVALS (stored root)") << " - choose MIDI";
+        std::vector<int> voiced;
+        for (int v = 0; v < kMaxVoices; ++v)
+        {
+            const int n = t.voiceNote[(size_t) v].load();
+            if (n >= 0 && t.voiceGate[(size_t) v].load() && std::find (voiced.begin(), voiced.end(), n) == voiced.end()) voiced.push_back (n);
+        }
+        juce::String txt = chordName (voiced);
+        const int src = (int) proc.value (NoteSource);
+        if (txt.isEmpty()) txt = src == 3 ? "ARP" : (src == 2 ? "INTERVALS" : "NO NOTES");
+        if (txt != chordBadge.text) { chordBadge.text = txt; chordBadge.repaint(); }
     }
-    if (s != statusText) { statusText = s; repaint (routeStrip); }
-    const juce::String dw = proc.value (WetOnly) > 0.5f ? "WET ONLY" : "DRY + WET   DRY " + juce::String (paramValueToText (DryLevel, proc.value (DryLevel)));
-    if (dw != dryWetText) { dryWetText = dw; repaint (header); }
-    // source info
-    juce::String si;
-    const int src = (int) proc.value (NoteSource);
-    if (src == 0) si = midiStatusText() + (t.holdingLast.load() ? "   |  holding last chord" : "");
-    else if (src == 2)
-    {
-        si = "offsets";
-        for (int k = 0; k < (int) proc.value (IntCount); ++k) { const int o = (int) proc.value (Int1 + k); si << " " << (o >= 0 ? "+" : "") << o; }
-        si << ((int) proc.value (IntMode) == 0 ? " st" : " steps");
-    }
-    if (si != sourceInfo) { sourceInfo = si; repaint (hCard); }
-    else if (midiLed > 0.05f) repaint (midiLedArea);
+    // source tooltip carries the live MIDI status (no permanent diagnostics in the layout)
+    source.setTooltip (juce::String (paramInfo (NoteSource).help) + "\n" + midiStatusText());
+    // transient hints inside the harmony well (only when something needs attention)
+    juce::String h;
+    if (proc.latencyChangePending()) h = "STOP TRANSPORT TO APPLY TIMING / QUALITY";
+    const int hn = t.hostNoteOnCounter.load();
+    if (hn != lastHostNoteCount) { lastHostNoteCount = hn; lastHostNoteTicks = juce::Time::getMillisecondCounter(); }
+    const bool recent = hn > 0 && juce::Time::getMillisecondCounter() - lastHostNoteTicks < 4000;
+    const int srcNow = (int) proc.value (NoteSource);
+    if (recent && (srcNow == 1 || (srcNow == 2 && (int) proc.value (IntRefSource) == 0)))
+        h = juce::String ("MIDI NOTES ARRIVING - SOURCE IS ") + (srcNow == 1 ? "CHORD" : "INTERVALS (STORED ROOT)");
+    if (t.protectionActive.exchange (false)) h = "WET LIMITER ACTIVE";
+    if (fixtureMode) h = {};
+    if (hint.getText() != h) hint.setText (h, juce::dontSendNotification);
     // A/B loudness tracking
     const float wl = proc.wetRmsDb();
     if (wl > -80.0f) proc.presets().noteLoudness (wl);
@@ -701,21 +655,25 @@ PluginEditor::PluginEditor (PluginProcessor& p) : juce::AudioProcessorEditor (p)
     setLookAndFeel (&lnf);
     juce::LookAndFeel::setDefaultLookAndFeel (&lnf);
     view = std::make_unique<MainView> (p, *this);
-    viewport.setViewedComponent (view.get(), false);
-    viewport.setScrollBarsShown (true, false);
-    viewport.setScrollBarThickness (10);
-    addAndMakeVisible (viewport);
+    addAndMakeVisible (canvas);
+    canvas.addAndMakeVisible (*view);
+    int top = 0;
     if (p.isStandalone() && p.source() != nullptr)
     {
         standalone = std::make_unique<StandalonePanel> (p);
         standalone->onSaveExperiment = [this] { saveExperiment(); };
-        addAndMakeVisible (*standalone);
+        canvas.addAndMakeVisible (*standalone);
+        standalone->setBounds (14, 8, theme::kCanvasW - 28, kStripH - 8);
+        top = kStripH;
     }
+    view->setBounds (0, top, theme::kCanvasW, theme::kCanvasH);
+    canvas.setSize (theme::kCanvasW, theme::kCanvasH + top);
     proc.presets().onChange = [this] { juce::Component::SafePointer<PluginEditor> sp (this); juce::MessageManager::callAsync ([sp] { if (sp) sp->view->refreshPresetName(); }); };
     setResizable (true, true);
-    const int extra = standalone ? 82 : 0;
-    setResizeLimits (950, 680, 2400, 1700);
-    setSize (1280, 846 + extra);
+    const double aspect = (double) canvas.getWidth() / (double) canvas.getHeight();
+    setResizeLimits ((int) (canvas.getWidth() * kMinScale), (int) (canvas.getHeight() * kMinScale), (int) (canvas.getWidth() * kMaxScale), (int) (canvas.getHeight() * kMaxScale));
+    if (auto* c = getConstrainer()) c->setFixedAspectRatio (aspect);
+    setSize ((int) std::lround (canvas.getWidth() * kDefaultScale), (int) std::lround (canvas.getHeight() * kDefaultScale));
     setWantsKeyboardFocus (false);
     startTimerHz (30);
 }
@@ -729,28 +687,35 @@ PluginEditor::~PluginEditor()
     setLookAndFeel (nullptr);
 }
 
+float PluginEditor::currentScale() const
+{
+    return juce::jlimit (0.2f, 4.0f, (float) getWidth() / (float) canvas.getWidth());
+}
+
 void PluginEditor::paint (juce::Graphics& g)
 {
-    g.setGradientFill (juce::ColourGradient (theme::shellTop, 0, 0, theme::shellBottom, 0, (float) getHeight(), false));
-    g.fillAll();
+    g.fillAll (theme::backdrop);
 }
 
 void PluginEditor::resized()
 {
-    auto r = getLocalBounds();
-    if (standalone) standalone->setBounds (r.removeFromTop (82).reduced (14, 6).withTrimmedBottom (-4));
-    viewport.setBounds (r);
-    view->availableHeight = r.getHeight();
-    const int w = r.getWidth() - (view->getHeight() > r.getHeight() ? viewport.getScrollBarThickness() : 0);
-    const int h = view->layout (w);
-    view->setSize (w, h);
-    if (h > r.getHeight() && w == r.getWidth()) { const int w2 = r.getWidth() - viewport.getScrollBarThickness(); view->setSize (w2, view->layout (w2)); }
+    // one uniform scale for the whole design (no reflow, no independent knob sizing)
+    const float s = std::min ((float) getWidth() / (float) canvas.getWidth(), (float) getHeight() / (float) canvas.getHeight());
+    const float ox = ((float) getWidth() - (float) canvas.getWidth() * s) * 0.5f, oy = ((float) getHeight() - (float) canvas.getHeight() * s) * 0.5f;
+    canvas.setTopLeftPosition (0, 0);
+    canvas.setTransform (juce::AffineTransform::scale (s).translated (ox, oy));
     if (advanced) advanced->setBounds (getLocalBounds());
 }
 
 void PluginEditor::timerCallback()
 {
-    view->update();
+    if (isShowing() || frame < 3) view->update();
+    ++frame;
+}
+
+void PluginEditor::tickForSnapshot()
+{
+    view->update(); // headless captures: the editor is not on screen, so drive the 30 Hz update directly
     ++frame;
 }
 
@@ -758,6 +723,26 @@ void PluginEditor::refreshForSnapshot()
 {
     resized();
     for (int i = 0; i < 3; ++i) view->update();
+}
+
+void PluginEditor::setReferenceFixture (bool on)
+{
+    view->setReferenceFixture (on);
+    view->update();
+}
+
+juce::Component* PluginEditor::mainView() const { return view.get(); }
+
+std::unique_ptr<juce::Component> PluginEditor::createSourceSettingsForSnapshot()
+{
+    auto c = std::make_unique<SourceSettings> (proc);
+    c->setLookAndFeel (&lnf);
+    return c;
+}
+
+juce::Image PluginEditor::snapshotCanvas (float scale)
+{
+    return view->createComponentSnapshot (view->getLocalBounds(), true, scale);
 }
 
 void PluginEditor::showAdvancedForSnapshot (const juce::String& tab)

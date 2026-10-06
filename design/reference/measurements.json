@@ -1,0 +1,645 @@
+{
+ "reference": {
+  "file": "references/playable-ambience-approved-gui.png",
+  "size": [
+   1536,
+   1024
+  ],
+  "sha256": "6a30d8e49b1807262d4eb45971ba589e6433cd988292d6c3a749a9c78fbafe68",
+  "mode": "8-bit sRGB",
+  "source": "approved design supplied in the conversation (WEBP 1536 x 1024, stored losslessly as PNG)"
+ },
+ "canvas": {
+  "width": 1536,
+  "height": 1024,
+  "editorScale": "uniform s = window width / 1536 (standalone adds an 82 px source strip above)"
+ },
+ "rectangles": {
+  "outerShell": [
+   15,
+   15,
+   1506,
+   983
+  ],
+  "delayCard": [
+   22,
+   118,
+   743,
+   436
+  ],
+  "reverbCard": [
+   772,
+   118,
+   743,
+   436
+  ],
+  "delayWell": [
+   42,
+   170,
+   704,
+   215
+  ],
+  "reverbWell": [
+   791,
+   170,
+   704,
+   215
+  ],
+  "routingStrip": [
+   22,
+   563,
+   1493,
+   63
+  ],
+  "harmonyCard": [
+   22,
+   634,
+   1493,
+   225
+  ],
+  "harmonyWell": [
+   42,
+   686,
+   912,
+   160
+  ],
+  "performanceCard": [
+   22,
+   866,
+   1493,
+   121
+  ],
+  "keybed": [
+   150,
+   872,
+   968,
+   111
+  ],
+  "presetBar": [
+   527,
+   36,
+   451,
+   52
+  ],
+  "abSegment": [
+   1204,
+   45,
+   79,
+   34
+  ],
+  "delayModeDropdown": [
+   556,
+   130,
+   156,
+   34
+  ],
+  "reverbModeDropdown": [
+   1298,
+   130,
+   163,
+   34
+  ],
+  "syncButton": [
+   670,
+   182,
+   61,
+   28
+  ],
+  "routeParallel": [
+   255,
+   572,
+   136,
+   43
+  ],
+  "routeDR": [
+   411,
+   572,
+   144,
+   43
+  ],
+  "routeRD": [
+   576,
+   572,
+   145,
+   43
+  ],
+  "placement": [
+   994,
+   574,
+   379,
+   39
+  ],
+  "chordBadge": [
+   825,
+   646,
+   105,
+   33
+  ],
+  "sourceDropdown": [
+   1084,
+   645,
+   132,
+   35
+  ],
+  "policyHold": [
+   1232,
+   645,
+   62,
+   35
+  ],
+  "policyRelease": [
+   1302,
+   645,
+   64,
+   35
+  ],
+  "policyAmbient": [
+   1374,
+   645,
+   65,
+   35
+  ],
+  "pitchWheelWell": [
+   49,
+   877,
+   26,
+   78
+  ],
+  "modWheelWell": [
+   98,
+   877,
+   26,
+   78
+  ],
+  "latch": [
+   1148,
+   873,
+   136,
+   44
+  ],
+  "freeze": [
+   1292,
+   873,
+   141,
+   44
+  ],
+  "wetOnly": [
+   1148,
+   929,
+   136,
+   47
+  ],
+  "advanced": [
+   1292,
+   929,
+   141,
+   47
+  ]
+ },
+ "knobs": {
+  "delay": {
+   "TIME": [
+    105,
+    459
+   ],
+   "FEEDBACK": [
+    245,
+    459
+   ],
+   "TONE": [
+    388,
+    459
+   ],
+   "AGE": [
+    532,
+    459
+   ],
+   "LEVEL": [
+    675,
+    459
+   ]
+  },
+  "reverb": {
+   "DECAY": [
+    858,
+    459
+   ],
+   "BLOOM": [
+    1002,
+    459
+   ],
+   "TONE": [
+    1143,
+    459
+   ],
+   "MOTION": [
+    1288,
+    459
+   ],
+   "LEVEL": [
+    1433,
+    459
+   ]
+  },
+  "harmony": {
+   "DEPTH": [
+    1024,
+    768
+   ],
+   "COLOUR": [
+    1169,
+    768
+   ],
+   "TRANSITION": [
+    1298,
+    768
+   ],
+   "DUCK": [
+    1433,
+    768
+   ]
+  },
+  "header": {
+   "DRY / WET": [
+    1450,
+    55
+   ]
+  },
+  "faceRadius": {
+   "engine": 34,
+   "header": 29.5
+  },
+  "readout": {
+   "engine": [
+    93,
+    30,
+    "y 507..537"
+   ],
+   "harmony": [
+    93,
+    30,
+    "y 813..841"
+   ]
+  },
+  "sweepDegrees": [
+   -135,
+   135
+  ],
+  "tickDots": {
+   "count": 9,
+   "anglesDeg": [
+    -120,
+    120,
+    30
+   ],
+   "radiusFactor": 1.235
+  },
+  "marker": {
+   "fromRadius": 0.4,
+   "toRadius": 0.855,
+   "widthFactor": 0.104,
+   "colour": "#F75A1C"
+  },
+  "calibrationNote": "Marker angles measured in the PNG fit a 270 degree sweep best (Feedback 42 % of 0..95 -> -15 deg, Age 28 % -> -64, Motion 30 % -> -55, Duck 24 % -> -68); some (Depth, Colour) are inconsistent in the raster and are not followed."
+ },
+ "textInk": {
+  "title": [
+   48,
+   40,
+   426,
+   67
+  ],
+  "subtitle": [
+   48,
+   80,
+   354,
+   89
+  ],
+  "presetText": [
+   661,
+   56,
+   806,
+   70
+  ],
+  "delayTitle": [
+   80,
+   137,
+   160,
+   155
+  ],
+  "reverbTitle": [
+   829,
+   137,
+   926,
+   155
+  ],
+  "harmonyTitle": [
+   80,
+   652,
+   210,
+   671
+  ],
+  "lblTIME": [
+   91,
+   402,
+   120,
+   418
+  ],
+  "lblFEEDBACK": [
+   215,
+   402,
+   278,
+   411
+  ],
+  "valFeedback": [
+   229,
+   516,
+   263,
+   527
+  ],
+  "valTime": [
+   95,
+   516,
+   115,
+   528
+  ],
+  "valLevel": [
+   650,
+   516,
+   701,
+   527
+  ],
+  "lblDEPTH": [
+   1005,
+   709,
+   1045,
+   719
+  ],
+  "valDepth": [
+   1009,
+   821,
+   1041,
+   832
+  ],
+  "routingLbl": [
+   163,
+   588,
+   230,
+   598
+  ],
+  "placementLbl": [
+   871,
+   588,
+   960,
+   598
+  ],
+  "afterSpace": [
+   1044,
+   589,
+   1127,
+   598
+  ],
+  "beforeSpace": [
+   1228,
+   589,
+   1317,
+   598
+  ],
+  "chordBadge": [
+   848,
+   657,
+   907,
+   667
+  ],
+  "sourceLbl": [
+   1016,
+   658,
+   1066,
+   667
+  ],
+  "sourceVal": [
+   1101,
+   658,
+   1138,
+   668
+  ],
+  "dryWetLbl": [
+   1424,
+   86,
+   1482,
+   101
+  ],
+  "dryWetVal": [
+   1440,
+   104,
+   1465,
+   113
+  ],
+  "latch": [
+   1194,
+   890,
+   1237,
+   900
+  ],
+  "freeze": [
+   1339,
+   890,
+   1386,
+   900
+  ],
+  "wetOnly": [
+   1182,
+   947,
+   1250,
+   957
+  ],
+  "advanced": [
+   1344,
+   947,
+   1417,
+   957
+  ],
+  "pitchLbl": [
+   46,
+   963,
+   79,
+   972
+  ],
+  "modLbl": [
+   98,
+   963,
+   124,
+   972
+  ],
+  "delayAxis": [
+   56,
+   368,
+   676,
+   376
+  ],
+  "reverbAxis": [
+   805,
+   368,
+   1479,
+   376
+  ],
+  "harmAxis": [
+   101,
+   828,
+   937,
+   836
+  ],
+  "harmNotes": [
+   62,
+   721,
+   77,
+   801
+  ]
+ },
+ "colourSamples": {
+  "shellUpper": [
+   245,
+   239,
+   232
+  ],
+  "shellUnderHeader": [
+   232,
+   225,
+   214
+  ],
+  "gapMid": [
+   225,
+   215,
+   202
+  ],
+  "backdropBottom": [
+   214,
+   205,
+   192
+  ],
+  "cardTop": [
+   245,
+   237,
+   229
+  ],
+  "cardMid": [
+   239,
+   232,
+   221
+  ],
+  "cardBottom": [
+   232,
+   222,
+   209
+  ],
+  "routingStrip": [
+   230,
+   139,
+   109
+  ],
+  "harmonyCardTop": [
+   242,
+   234,
+   225
+  ],
+  "wellUpper": [
+   30,
+   39,
+   38
+  ],
+  "wellLower": [
+   27,
+   37,
+   36
+  ],
+  "valueFieldFill": [
+   239,
+   233,
+   226
+  ],
+  "valueFieldBorder": [
+   206,
+   199,
+   185
+  ],
+  "dropdownFillTop": [
+   254,
+   249,
+   239
+  ],
+  "dropdownBorder": [
+   202,
+   195,
+   184
+  ],
+  "knobFaceCentre": [
+   238,
+   231,
+   220
+  ],
+  "knobFaceUpperLeft": [
+   255,
+   243,
+   232
+  ],
+  "knobFaceLowerRight": [
+   230,
+   223,
+   209
+  ],
+  "knobOutlineBottom": [
+   20,
+   14,
+   7
+  ],
+  "knobMarker": [
+   255,
+   98,
+   40
+  ],
+  "abSelected": [
+   255,
+   219,
+   197
+  ],
+  "whiteKey": [
+   240,
+   235,
+   225
+  ],
+  "blackKey": [
+   34,
+   34,
+   32
+  ],
+  "activeWhiteKey": [
+   253,
+   162,
+   115
+  ]
+ },
+ "axes": {
+  "delay": {
+   "zeroX": 60.5,
+   "pxPerSecond": 152,
+   "centreY": 277.5,
+   "labels": "0..4 s"
+  },
+  "reverb": {
+   "zeroX": 810,
+   "pxPerSecond": 78.1,
+   "centreY": 280,
+   "labels": "0..8 s (reference '8 s' label sits 31 px right of its grid line)"
+  },
+  "harmony": {
+   "zeroX": 105,
+   "pxPerSecond": 102.75,
+   "laneCentresY": [
+    727.5,
+    761,
+    794.5
+   ],
+   "labels": "0..8 s (reference labels unevenly spaced)"
+  }
+ }
+}

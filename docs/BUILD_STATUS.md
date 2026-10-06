@@ -25,6 +25,10 @@
   delivery check (pa_hostcheck) PASS on macOS for the VST3 and the MIDI AU (MIDI changes 63 % of the output) and
   confirms the Audio AU has no MIDI input; Linux VST3 PASS. All other checks green as in run 2.
 
+- GUI v2 (approved 1536 x 1024 design, Classic-only harmony, header DRY / WET): native captures, comparison and
+  report in `design/visual-validation/`; implementation note `docs/GUI-Implementation-Note.md`. Linux: 36/36 tests,
+  self-test 37/37, pluginval strictness 8 SUCCESS, host MIDI check PASS. macOS: see the CI run for this commit.
+
 ## Next actions
 - Host tests in Ableton Live and Logic Pro, hardware live input and listening feedback (see Feedback-Template).
 

@@ -2,6 +2,7 @@
 // Never rename an id; add new parameters at the end of a group and bump kParamVersion if semantics change.
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <string>
@@ -30,7 +31,7 @@ struct ParamInfo
 // X(ENUM, id, name, kind, min, max, default, centre, unit, choices, group, help)
 #define PA_PARAMS(X) \
  X(DryLevel, "dryLevel", "Dry Level", Float, -60, 6, 0, -12, "dB", "", "Mix", "Unprocessed source level. Only this gain (and Studio alignment delay) touches the dry signal. -60 = off.") \
- X(WetLevel, "wetLevel", "Wet Level", Float, -60, 6, -9, -12, "dB", "", "Mix", "Final ambience (wet return) level. The header OUTPUT knob controls this; it never affects the dry signal.") \
+ X(WetLevel, "wetLevel", "Wet Level", Float, -60, 6, -9, -12, "dB", "", "Mix", "Final ambience (wet return) level (Advanced > Mix / Timing). It never affects the dry signal; the header DRY / WET knob blends dry against wet.") \
  X(WetOnly, "wetOnly", "Wet Only", Bool, 0, 1, 0, 0, "", "", "Mix", "Removes the dry signal completely. Use on return/send tracks or when the source track stays audible.") \
  X(WetTrim, "wetTrim", "Wet Trim", Float, -12, 12, 0, 0, "dB", "", "Mix", "Wet-only trim used by the A/B loudness match. Bounded to +/-12 dB.") \
  X(InputSource, "inputSource", "Input Source", Choice, 0, 2, 0, 0, "", "Main + Sidechain|Main Only|Sidechain Only", "Mix", "Which input buses feed the effect. Logic MIDI-controlled AU: audio arrives on the sidechain.") \
@@ -51,7 +52,7 @@ struct ParamInfo
  X(DuckRelease, "duckRelease", "Duck Release", Float, 20, 3000, 350, 400, "ms", "", "Mix", "How fast the wet returns after the source stops.") \
  X(Timing, "timing", "Timing", Choice, 0, 1, 1, 0, "", "Live|Studio", "Timing", "Live: dry is immediate, wet carries extra processing delay. Studio: dry and wet aligned, fixed latency reported to the host.") \
  X(Quality, "quality", "Quality", Choice, 0, 2, 1, 0, "", "Eco|Standard|High", "Timing", "Eco/Standard/High: FFT size 1024/2048/4096, resonator partial cap 6/12/16, Wash lines 8/16/16, shift window 40/60/80 ms, Classic filter order 2/4/4. Changing it clears the wet tail.") \
- X(HarmMethod, "harmMethod", "Harmony Method", Choice, 0, 4, 1, 0, "", "Off|Classic|FFT|Resonator|Shift", "Harmony", "Off: ordinary ambience. Classic: filter-bank vocoder. FFT: STFT vocoder. Resonator: tuned resonances excited by the wet audio. Shift: relative transposition.") \
+ X(HarmMethod, "harmMethod", "Harmony Method", Choice, 0, 4, 1, 0, "", "Off|Classic|FFT|Resonator|Shift", "Harmony", "Legacy selector kept for saved sessions and automation: this build always uses Classic. Off maps to Harmony Enable off; FFT/Resonator/Shift load as Classic. Former help: Off: ordinary ambience. Classic: filter-bank vocoder. FFT: STFT vocoder. Resonator: tuned resonances excited by the wet audio. Shift: relative transposition.") \
  X(Depth, "depth", "Harmony Depth", Float, 0, 100, 60, 0, "%", "", "Harmony", "Blend between ordinary wet (0%) and harmonized wet (100%). Linear blend.") \
  X(Colour, "colour", "Colour", Float, 0, 100, 35, 0, "%", "", "Harmony", "Classic/FFT: dark-to-bright carrier tilt. Resonator: partial brightness. Shift: high-frequency tone of the shifted voices.") \
  X(Transition, "transition", "Transition", Float, 0, 2000, 120, 300, "ms", "", "Harmony", "Crossfade or glide time when one chord replaces another. Independent of room decay.") \
@@ -174,7 +175,9 @@ struct ParamInfo
  X(WaLowRatio, "waLowRatio", "Wash Low Decay", Float, 0.2f, 1.5f, 0.8f, 0, "x", "", "Reverb", "Low-frequency decay relative to the main decay.") \
  X(WaMotion, "waMotion", "Wash Motion", Float, 0, 100, 30, 0, "%", "", "Reverb", "Decorrelated delay modulation depth.") \
  X(WaRate, "waRate", "Wash Motion Rate", Float, 0.005f, 1, 0.1f, 0.1f, "Hz", "", "Reverb", "Modulation rate.") \
- X(WaLevel, "waLevel", "Wash Level", Float, -60, 6, -6, -12, "dB", "", "Reverb", "Wash wet level.")
+ X(WaLevel, "waLevel", "Wash Level", Float, -60, 6, -6, -12, "dB", "", "Reverb", "Wash wet level.") \
+ X(HarmEnable, "harmEnable", "Harmony Enable", Bool, 0, 1, 1, 0, "", "", "Harmony", "Turns the Classic harmony on or off. Off = ordinary ambience (the settings are kept).") \
+ X(Mix, "mix", "Dry/Wet", Float, 0, 100, 50, 0, "%", "", "Mix", "Overall dry/wet blend. 50% = dry and wet both at their full levels; towards 0% the wet fades out (0% = dry only), towards 100% the dry fades out (100% = wet only).")
 
 enum ParamId : int
 {
@@ -206,6 +209,15 @@ struct ParamSet
     int i (int idx) const noexcept { return (int) (v[(size_t) idx] + 0.5f - (v[(size_t) idx] < 0 ? 1.0f : 0.0f)); }
     bool b (int idx) const noexcept { return v[(size_t) idx] >= 0.5f; }
 };
+
+/** Classic-only build: legacy harmony method Off -> Harmony Enable off; FFT/Resonator/Shift -> Classic.
+    Applied whenever a saved state, preset or A/B slot is loaded. */
+void migrateLegacyHarmony (ParamSet& ps) noexcept;
+/** The harmony method the engine actually runs (Classic or Off). */
+int effectiveHarmonyMethod (const ParamSet& ps) noexcept;
+/** Dry/Wet mix law: 50% = both at unity (original behaviour), 0% dry only, 100% wet only. */
+inline float mixDryGain (float mixPercent) noexcept { const float m = mixPercent / 100.0f; return m <= 0.5f ? 1.0f : std::max (0.0f, 2.0f * (1.0f - m)); }
+inline float mixWetGain (float mixPercent) noexcept { const float m = mixPercent / 100.0f; return m >= 0.5f ? 1.0f : std::max (0.0f, 2.0f * m); }
 
 // Delay division in beats for PA_DIVS index.
 double divisionBeats (int index) noexcept;

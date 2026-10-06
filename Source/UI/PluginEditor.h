@@ -1,10 +1,12 @@
-// Playable Ambience editor: ivory/orange interface following the supplied mockup, every control live.
+// Playable Ambience editor. The main view is laid out once on the canonical 1536 x 1024 canvas of
+// references/playable-ambience-approved-gui.png and the whole canvas is scaled uniformly with the window
+// (fixed aspect ratio). The standalone source strip sits above the canvas inside the same scaled container.
 #pragma once
 
 #include "AdvancedPanel.h"
-#include "Graphs.h"
 #include "Keyboard.h"
 #include "LookAndFeel.h"
+#include "Visuals.h"
 #include "Widgets.h"
 
 namespace pa
@@ -28,16 +30,26 @@ public:
     void saveExperiment();
     /** Used by the headless self-test to produce screenshots with populated graphs. */
     void refreshForSnapshot();
-    void tickForSnapshot() { timerCallback(); }
+    void tickForSnapshot();
     void showAdvancedForSnapshot (const juce::String& tab);
+    /** Visual-test only: deterministic art-directed graph data derived from the approved reference. */
+    void setReferenceFixture (bool on);
+    /** Renders only the canonical main view at 1536 x 1024 (times `scale`), without host chrome or the standalone strip. */
+    juce::Image snapshotCanvas (float scale);
+    juce::Component* mainView() const;
+    std::unique_ptr<juce::Component> createSourceSettingsForSnapshot();
+
+    static constexpr int kStripH = 82;
+    static constexpr float kDefaultScale = 0.85f, kMinScale = 0.62f, kMaxScale = 1.5f;
 
 private:
     void timerCallback() override;
+    float currentScale() const;
     PluginProcessor& proc;
     PALookAndFeel lnf;
-    juce::TooltipWindow tooltips { this, 650 };
+    juce::TooltipWindow tooltips { this, 700 };
+    juce::Component canvas;                 // canonical coordinates; scaled by an affine transform
     std::unique_ptr<StandalonePanel> standalone;
-    juce::Viewport viewport;
     std::unique_ptr<MainView> view;
     std::unique_ptr<AdvancedPanel> advanced;
     juce::Component::SafePointer<juce::Component> focusBeforeAdvanced;

@@ -7,9 +7,19 @@
 
 namespace pa
 {
+/** Visualization tap: per-voice min/max of the Classic synthesis band nearest each voice's fundamental
+    (the band output is dominated by that voice's carrier). Accumulated until the engine stores a history bucket.
+    Written on the audio thread only; never affects the output. */
+struct VoiceTap
+{
+    float mn[kMaxVoices] {}, mx[kMaxVoices] {};
+    void clear() noexcept { for (int v = 0; v < kMaxVoices; ++v) { mn[v] = 0.0f; mx[v] = 0.0f; } }
+};
+
 /** Per-chunk context handed to every harmony method. Arrays have n <= VoiceBank::kChunk samples. */
 struct HarmonyContext
 {
+    VoiceTap* tap = nullptr;            // optional visualization tap (Classic only)
     const ParamSet* p = nullptr;
     const VoiceBank* voices = nullptr;
     const float* carrier = nullptr;     // mono band-limited carrier (already enveloped & normalised)

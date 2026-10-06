@@ -6,7 +6,7 @@
 | Steinberg VST3 SDK (bundled in JUCE) | as shipped with JUCE 8.0.15 | MIT (VST3_SDK-LICENSE.txt) | VST3 wrapper |
 | Apple AudioUnitSDK (bundled in JUCE) | as shipped with JUCE 8.0.15 | Apache 2.0 (AudioUnitSDK-LICENSE.txt) | AU wrappers |
 | zlib, libpng, FLAC, SheenBidi (bundled in JUCE) | as shipped with JUCE 8.0.15 | see the respective licence files | compression, PNG screenshots, FLAC import, text layout |
-| Inter typeface | 4.1 (Regular, Medium, SemiBold, Bold) | SIL Open Font License 1.1 (Inter-OFL-LICENSE.txt) | Embedded UI font |
+| Inter typeface | 4.1 (Regular, Medium, SemiBold, Bold); 4.0 (ExtraBold, Light, from the official v4.0 release) | SIL Open Font License 1.1 (Inter-OFL-LICENSE.txt) | Embedded UI font |
 | Tracktion pluginval | v1.0.4 | GPLv3 | Validation tool only; downloaded at validation time, never bundled |
 
 All DSP (vocoders, resonator, shifters, delays, reverbs, FFT) is original project code. The Plate follows the

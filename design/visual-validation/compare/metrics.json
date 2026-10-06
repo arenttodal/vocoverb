@@ -1,0 +1,164 @@
+{
+ "reference": "references/playable-ambience-approved-gui.png",
+ "capture": "/tmp/claude-0/vis/shots/reference-fixture-1536x1024.png",
+ "captureScale": 1.0,
+ "regions": {
+  "full": {
+   "meanAbsDiffRGB": [
+    12.76,
+    12.02,
+    12.26
+   ]
+  },
+  "header": {
+   "meanAbsDiffRGB": [
+    14.33,
+    14.13,
+    15.63
+   ],
+   "refEdgesMatched": 0.871,
+   "captureEdgesMatched": 0.909
+  },
+  "delay-card": {
+   "meanAbsDiffRGB": [
+    8.95,
+    7.89,
+    8.03
+   ],
+   "refEdgesMatched": 0.842,
+   "captureEdgesMatched": 0.95
+  },
+  "reverb-card": {
+   "meanAbsDiffRGB": [
+    15.22,
+    13.59,
+    12.69
+   ],
+   "refEdgesMatched": 0.881,
+   "captureEdgesMatched": 0.937
+  },
+  "delay-graph": {
+   "meanAbsDiffRGB": [
+    11.22,
+    7.72,
+    6.91
+   ],
+   "refEdgesMatched": 0.629,
+   "captureEdgesMatched": 0.855,
+   "columnLumaMeanAbsDiff": 6.55,
+   "rowLumaMeanAbsDiff": 6.72
+  },
+  "reverb-graph": {
+   "meanAbsDiffRGB": [
+    23.79,
+    19.17,
+    16.19
+   ],
+   "refEdgesMatched": 0.801,
+   "captureEdgesMatched": 0.899,
+   "columnLumaMeanAbsDiff": 8.45,
+   "rowLumaMeanAbsDiff": 5.09
+  },
+  "routing": {
+   "meanAbsDiffRGB": [
+    8.72,
+    10.48,
+    11.79
+   ],
+   "refEdgesMatched": 0.948,
+   "captureEdgesMatched": 0.957
+  },
+  "harmony-header": {
+   "meanAbsDiffRGB": [
+    8.11,
+    9.82,
+    11.36
+   ],
+   "refEdgesMatched": 0.977,
+   "captureEdgesMatched": 0.978
+  },
+  "harmony-graph": {
+   "meanAbsDiffRGB": [
+    17.6,
+    10.93,
+    8.33
+   ],
+   "refEdgesMatched": 0.573,
+   "captureEdgesMatched": 0.878,
+   "columnLumaMeanAbsDiff": 9.01,
+   "rowLumaMeanAbsDiff": 8.95
+  },
+  "harmony-knobs": {
+   "meanAbsDiffRGB": [
+    10.32,
+    11.58,
+    12.66
+   ],
+   "refEdgesMatched": 0.842,
+   "captureEdgesMatched": 0.831
+  },
+  "keyboard-perf": {
+   "meanAbsDiffRGB": [
+    21.17,
+    21.99,
+    23.45
+   ],
+   "refEdgesMatched": 0.69,
+   "captureEdgesMatched": 0.798
+  },
+  "knob-feedback": {
+   "meanAbsDiffRGB": [
+    13.56,
+    14.82,
+    15.6
+   ],
+   "refEdgesMatched": 0.947,
+   "captureEdgesMatched": 0.959
+  },
+  "knob-bloom": {
+   "meanAbsDiffRGB": [
+    11.66,
+    13.36,
+    14.16
+   ],
+   "refEdgesMatched": 0.952,
+   "captureEdgesMatched": 0.96
+  },
+  "knob-depth": {
+   "meanAbsDiffRGB": [
+    11.54,
+    12.81,
+    13.85
+   ],
+   "refEdgesMatched": 0.92,
+   "captureEdgesMatched": 0.904
+  },
+  "knob-drywet": {
+   "meanAbsDiffRGB": [
+    16.81,
+    18.75,
+    20.86
+   ],
+   "refEdgesMatched": 0.846,
+   "captureEdgesMatched": 0.894
+  },
+  "dropdown-bbd": {
+   "meanAbsDiffRGB": [
+    6.3,
+    7.2,
+    9.34
+   ],
+   "refEdgesMatched": 1.0,
+   "captureEdgesMatched": 0.998
+  },
+  "preset-bar": {
+   "meanAbsDiffRGB": [
+    8.27,
+    9.85,
+    12.41
+   ],
+   "refEdgesMatched": 0.982,
+   "captureEdgesMatched": 0.921
+  }
+ }
+}

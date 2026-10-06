@@ -130,7 +130,10 @@ private:
     float tmpL[kChunk], tmpR[kChunk], zero[kChunk], inScL[kChunk], inScR[kChunk];
     float sEL[kChunk], sER[kChunk], sFL[kChunk], sFR[kChunk];
     float wetL[kChunk], wetR[kChunk];
+    float dipInL[kChunk], dipInR[kChunk]; // wet-graph input faded with the topology dip
     float delayOutPeak = 0, reverbOutPeak = 0;
+    float delayMin = 0, delayMax = 0, reverbMin = 0, reverbMax = 0, lastDuckGain = 1.0f;
+    VoiceTap voiceTap;
     // arp handling
     bool arpSkipFirstTick = false;
     Arpeggiator::Out pendingArp;

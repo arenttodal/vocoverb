@@ -10,7 +10,13 @@ namespace pa
 class ParamKnob : public juce::Component
 {
 public:
+    /** Engine: label above, 68 px face, value field below (bounds 140 x 146, knob centre at local (70, 64)).
+        Header: ~58 px face with label and value text below (bounds 120 x 100, knob centre at local (60, 36)). */
+    enum class Style { Engine, Header, Compact };
     ParamKnob (PluginProcessor& p, int paramIndex, const juce::String& title, bool compact = false);
+    ParamKnob (PluginProcessor& p, int paramIndex, const juce::String& title, Style style);
+    static constexpr int kEngineW = 140, kEngineH = 146, kEngineCx = 70, kEngineCy = 64;
+    static constexpr int kHeaderW = 120, kHeaderH = 100, kHeaderCx = 60, kHeaderCy = 33;
     void bind (int paramIndex, const juce::String& title);
     int boundParam() const noexcept { return index; }
     void resized() override;
@@ -23,6 +29,7 @@ private:
     int index = -1;
     juce::String titleText;
     bool compact = false;
+    Style style = Style::Engine;
     juce::Label value;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
 };
@@ -48,7 +55,7 @@ private:
     juce::StringArray items;
     std::vector<float> vals;
     int sel = 0;
-    float fontH = 12.5f;
+    float fontH = 9.5f; // cap height
     std::unique_ptr<juce::ParameterAttachment> attach;
 };
 
@@ -74,7 +81,10 @@ private:
 class IconButton : public juce::Button
 {
 public:
-    enum class Icon { Folder, Save, Gear, Kebab, Heart, Prev, Next, Panic, TailKill, Play, Pause, Stop, Loop, Record, Export, Sliders, Close };
+    enum class Icon { Folder, Save, Gear, Kebab, Heart, Prev, Next, Panic, TailKill, Play, Pause, Stop, Loop, Record, Export, Sliders, Close,
+                      Pin, Wave, Cloud, RouteParallel, RouteDR, RouteRD };
+    /** Draws an icon path set into `b` with stroke colour `c` (shared by icon buttons and pictogram buttons). */
+    static void drawIcon (juce::Graphics& g, Icon icon, juce::Rectangle<float> b, juce::Colour c, bool filled, float strokeW);
     IconButton (Icon i, const juce::String& tooltip);
     void paintButton (juce::Graphics&, bool highlighted, bool down) override;
     void setFilled (bool f) { filled = f; repaint(); }
@@ -82,6 +92,21 @@ public:
 private:
     Icon icon;
     bool filled = false;
+};
+
+/** Exclusive pictogram button bound to one value of a choice parameter (routing, no-note policy). */
+class ChoiceIconButton : public juce::Button
+{
+public:
+    ChoiceIconButton (PluginProcessor& p, int paramIndex, int choiceValue, IconButton::Icon icon, const juce::String& name, const juce::String& tip);
+    void paintButton (juce::Graphics&, bool highlighted, bool down) override;
+    void clicked() override;
+
+private:
+    PluginProcessor& proc;
+    int index, choice;
+    IconButton::Icon icon;
+    std::unique_ptr<juce::ParameterAttachment> attach;
 };
 
 /** Small engine enable dot (orange = processing on). */
@@ -121,6 +146,7 @@ private:
 class LevelMeter : public juce::Component
 {
 public:
+    /** Narrow stereo pair: label on top (13 px), two 7 px bars with a 4 px gap. */
     explicit LevelMeter (const juce::String& label) : name (label) {}
     void setLevels (float l, float r);
     void paint (juce::Graphics&) override;

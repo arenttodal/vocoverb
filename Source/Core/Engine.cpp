@@ -63,8 +63,8 @@ void Engine::reset()
 
 void Engine::initFromParams() noexcept
 {
-    dryGain.reset (dbToGain (p[DryLevel]));
-    wetGain.reset (dbToGain (p[WetLevel]));
+    dryGain.reset (dbToGain (p[DryLevel]) * mixDryGain (p[Mix]));
+    wetGain.reset (dbToGain (p[WetLevel]) * dbToGain (p[WetTrim]) * (p.b (WetOnly) ? 1.0f : mixWetGain (p[Mix])));
     wetOnlyGain.reset (p.b (WetOnly) ? 0.0f : 1.0f);
     dip = 1.0f; dipState = 0;
     topoKey = -1; pendingTopoKey = -1;
@@ -80,7 +80,7 @@ void Engine::initFromParams() noexcept
     if (! p.b (DelayEnable)) { dStage.gain[dStage.active] = 0.0f; dStage.state[dStage.active] = 0; }
     if (! p.b (ReverbEnable)) { rStage.gain[rStage.active] = 0.0f; rStage.state[rStage.active] = 0; }
     {
-        const int m = p.i (HarmMethod);
+        const int m = effectiveHarmonyMethod (p);
         hA.setInitialMethod (m); hB.setInitialMethod (m);
         depthCur = m == MethodOff ? 0.0f : clampf (p[Depth] / 100.0f, 0.0f, 1.0f);
         ambient = 1.0f;
@@ -475,11 +475,12 @@ void Engine::processChunk (const float* inL, const float* inR, float* outL, floa
     carrier.render (voices, p, n, carrierBuf, carrierGain);
 
     HarmonyContext ctx;
+    ctx.tap = &voiceTap;
     ctx.p = &p; ctx.voices = &voices; ctx.carrier = carrierBuf; ctx.carrierGain = carrierGain;
     ctx.quality = appliedQuality; ctx.sr = sr;
 
     // depth (with mod wheel and the Ambient no-note policy)
-    const int method = p.i (HarmMethod);
+    const int method = effectiveHarmonyMethod (p); // Classic-only build (legacy methods map to Classic)
     const int modTarget = p.i (ModWheelTarget);
     float dT = method == MethodOff ? 0.0f : clampf (p[Depth] / 100.0f + (modTarget == 0 ? modWheel : 0.0f), 0.0f, 1.0f);
     if (p.i (NoNotePolicy) == 2 && p.i (NoteSource) != 3)
@@ -526,7 +527,9 @@ void Engine::processChunk (const float* inL, const float* inR, float* outL, floa
         if (killGain >= 1.0f) killState = 0;
     }
 
-    // ---- topology dip
+    // ---- topology dip (fades the wet output AND the signal entering the spaces, so a swap never
+    //      records a discontinuity into a delay/reverb tail that would replay later)
+    const float dipBefore = dip;
     if (dipState == 1)
     {
         dip = std::max (0.0f, dip - (float) n / (0.025f * (float) sr));
@@ -535,6 +538,7 @@ void Engine::processChunk (const float* inL, const float* inR, float* outL, floa
             topoKey = pendingTopoKey; pendingTopoKey = -1;
             activeRouting = p.i (Routing); activePlacement = p.i (Placement); activeApply = p.i (ApplyHarmonyTo);
             studio = p.i (Timing) == 1; studioLat = studioLatency (appliedQuality);
+            hA.reset(); hB.reset(); // the harmony units now see a different signal: start from clean envelopes
             dipState = 2;
         }
     }
@@ -542,6 +546,14 @@ void Engine::processChunk (const float* inL, const float* inR, float* outL, floa
     {
         dip = std::min (1.0f, dip + (float) n / (0.025f * (float) sr));
         if (dip >= 1.0f) dipState = 0;
+    }
+
+    const float* gInL = inL; const float* gInR = inR;
+    if (dipState != 0 || dipBefore < 1.0f)
+    {
+        const float dStep = (dip - dipBefore) / (float) std::max (1, n);
+        for (int i = 0; i < n; ++i) { const float gD = dipBefore + dStep * (float) (i + 1); dipInL[i] = inL[i] * gD; dipInR[i] = inR[i] * gD; }
+        gInL = dipInL; gInR = dipInR;
     }
 
     float* wl = wetL; float* wr = wetR;
@@ -558,24 +570,24 @@ void Engine::processChunk (const float* inL, const float* inR, float* outL, floa
         {
             if (routing == 0)
             {
-                runDelay (sc, freezeDelay, inL, inR, sEL, sER, sAL, sAR, n);
-                runReverb (sc, inL, inR, sFL, sFR, sBL, sBR, n);
+                runDelay (sc, freezeDelay, gInL, gInR, sEL, sER, sAL, sAR, n);
+                runReverb (sc, gInL, gInR, sFL, sFR, sBL, sBR, n);
                 hA.process (ctx, method, studio, studioLat, sAL, sAR, sCL, sCR, n, apply != 2 ? dStart : 0.0f, apply != 2 ? dEnd : 0.0f);
                 hB.process (ctx, method, studio, studioLat, sBL, sBR, sDL, sDR, n, apply != 1 ? dStart : 0.0f, apply != 1 ? dEnd : 0.0f);
                 for (int i = 0; i < n; ++i) { wl[i] = sCL[i] + sDL[i]; wr[i] = sCR[i] + sDR[i]; }
             }
             else if (routing == 1)
             {
-                const float eD = runDelay (sc, freezeDelay, inL, inR, sEL, sER, sAL, sAR, n);
-                for (int i = 0; i < n; ++i) { sCL[i] = eD * sEL[i] * send + (1.0f - eD) * inL[i]; sCR[i] = eD * sER[i] * send + (1.0f - eD) * inR[i]; }
+                const float eD = runDelay (sc, freezeDelay, gInL, gInR, sEL, sER, sAL, sAR, n);
+                for (int i = 0; i < n; ++i) { sCL[i] = eD * sEL[i] * send + (1.0f - eD) * gInL[i]; sCR[i] = eD * sER[i] * send + (1.0f - eD) * gInR[i]; }
                 runReverb (sc, sCL, sCR, sFL, sFR, sBL, sBR, n);
                 for (int i = 0; i < n; ++i) { sDL[i] = sAL[i] + sBL[i]; sDR[i] = sAR[i] + sBR[i]; }
                 hA.process (ctx, method, studio, studioLat, sDL, sDR, wl, wr, n, dStart, dEnd);
             }
             else
             {
-                const float eR = runReverb (sc, inL, inR, sFL, sFR, sBL, sBR, n);
-                for (int i = 0; i < n; ++i) { sCL[i] = eR * sFL[i] * send + (1.0f - eR) * inL[i]; sCR[i] = eR * sFR[i] * send + (1.0f - eR) * inR[i]; }
+                const float eR = runReverb (sc, gInL, gInR, sFL, sFR, sBL, sBR, n);
+                for (int i = 0; i < n; ++i) { sCL[i] = eR * sFL[i] * send + (1.0f - eR) * gInL[i]; sCR[i] = eR * sFR[i] * send + (1.0f - eR) * gInR[i]; }
                 runDelay (sc, freezeDelay, sCL, sCR, sEL, sER, sAL, sAR, n);
                 for (int i = 0; i < n; ++i) { sDL[i] = sAL[i] + sBL[i]; sDR[i] = sAR[i] + sBR[i]; }
                 hA.process (ctx, method, studio, studioLat, sDL, sDR, wl, wr, n, dStart, dEnd);
@@ -583,8 +595,8 @@ void Engine::processChunk (const float* inL, const float* inR, float* outL, floa
         }
         else // Before Space: harmonise the input once, then the space
         {
-            hA.process (ctx, method, studio, studioLat, inL, inR, sCL, sCR, n, dStart, dEnd);  // u
-            hB.process (ctx, MethodOff, studio, studioLat, inL, inR, sDL, sDR, n, 0.0f, 0.0f); // aligned x
+            hA.process (ctx, method, studio, studioLat, gInL, gInR, sCL, sCR, n, dStart, dEnd);  // u
+            hB.process (ctx, MethodOff, studio, studioLat, gInL, gInR, sDL, sDR, n, 0.0f, 0.0f); // aligned x
             if (routing == 0)
             {
                 const float* dInL = apply != 2 ? sCL : sDL; const float* dInR = apply != 2 ? sCR : sDR;
@@ -613,6 +625,9 @@ void Engine::processChunk (const float* inL, const float* inR, float* outL, floa
         {
             delayOutPeak = std::max (delayOutPeak, std::max (std::abs (sAL[i]), std::abs (sAR[i])));
             reverbOutPeak = std::max (reverbOutPeak, std::max (std::abs (sBL[i]), std::abs (sBR[i])));
+            const float dm = 0.5f * (sAL[i] + sAR[i]), rm = 0.5f * (sBL[i] + sBR[i]);
+            delayMin = std::min (delayMin, dm); delayMax = std::max (delayMax, dm);
+            reverbMin = std::min (reverbMin, rm); reverbMax = std::max (reverbMax, rm);
         }
     }
 
@@ -623,8 +638,9 @@ void Engine::processChunk (const float* inL, const float* inR, float* outL, floa
     const float duckAmt = p[DuckAmount] / 100.0f;
     const float duckA = onePoleCoef (p[DuckAttack] / 1000.0f, sr), duckR = onePoleCoef (p[DuckRelease] / 1000.0f, sr);
     const float limRel = t60Coef (0.25f, sr);
-    wetGain.set (dbToGain (p[WetLevel]) * dbToGain (p[WetTrim]));
-    dryGain.set (dbToGain (p[DryLevel]));
+    // DRY / WET: 50% = both at unity; Wet Only overrides the blend (dry removed, wet at full level, mix value kept)
+    wetGain.set (dbToGain (p[WetLevel]) * dbToGain (p[WetTrim]) * (p.b (WetOnly) ? 1.0f : mixWetGain (p[Mix])));
+    dryGain.set (dbToGain (p[DryLevel]) * mixDryGain (p[Mix]));
     wetOnlyGain.set (p.b (WetOnly) ? 0.0f : 1.0f);
     const bool timingDip = pendingTopoKey >= 0 && (pendingTopoKey % 10) != (topoKey % 10);
     bool finite = allFinite (wl, n) && allFinite (wr, n);
@@ -650,6 +666,7 @@ void Engine::processChunk (const float* inL, const float* inR, float* outL, floa
             const float depthN = clampf ((gainToDb (duckEnv) + 50.0f) / 35.0f, 0.0f, 1.0f);
             duckGain = dbToGain (-24.0f * duckAmt * depthN);
         }
+        lastDuckGain = duckGain;
         float l = lowCutL.process (wl[i]), r = lowCutR.process (wr[i]);
         l = highCutL.process (l); r = highCutR.process (r);
         const float m = 0.5f * (l + r), s = 0.5f * (l - r) * width;
@@ -681,6 +698,23 @@ void Engine::processChunk (const float* inL, const float* inR, float* outL, floa
             const int hw = telemetry.histWrite.load (std::memory_order_relaxed);
             telemetry.histDelay[(size_t) hw].store (delayOutPeak, std::memory_order_relaxed);
             telemetry.histReverb[(size_t) hw].store (reverbOutPeak, std::memory_order_relaxed);
+            telemetry.histDelayMin[(size_t) hw].store (delayMin, std::memory_order_relaxed);
+            telemetry.histDelayMax[(size_t) hw].store (delayMax, std::memory_order_relaxed);
+            telemetry.histReverbMin[(size_t) hw].store (reverbMin, std::memory_order_relaxed);
+            telemetry.histReverbMax[(size_t) hw].store (reverbMax, std::memory_order_relaxed);
+            {
+                const float lg = depthCur * lastDuckGain;
+                for (int v = 0; v < Telemetry::kLanes; ++v)
+                {
+                    const auto& sl = voices.slot (v);
+                    const bool sounding = sl.note >= 0 && sl.env > 1.0e-4f;
+                    telemetry.histLaneMin[(size_t) v][(size_t) hw].store (sounding ? voiceTap.mn[v] * lg : 0.0f, std::memory_order_relaxed);
+                    telemetry.histLaneMax[(size_t) v][(size_t) hw].store (sounding ? voiceTap.mx[v] * lg : 0.0f, std::memory_order_relaxed);
+                    telemetry.histLaneNote[(size_t) v][(size_t) hw].store (sounding ? sl.note : -1, std::memory_order_relaxed);
+                }
+                voiceTap.clear();
+            }
+            delayMin = delayMax = reverbMin = reverbMax = 0.0f;
             telemetry.histWet[(size_t) hw].store (bucketWet, std::memory_order_relaxed);
             telemetry.histDry[(size_t) hw].store (bucketDry, std::memory_order_relaxed);
             telemetry.histWrite.store ((hw + 1) & (Telemetry::kHistLen - 1), std::memory_order_relaxed);
