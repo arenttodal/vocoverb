@@ -47,12 +47,11 @@ int main (int argc, char** argv)
     }
     const Config configs[] = {
         { "Plate + Classic (32 bands), 3 voices", [] (ParamSet& p) { base (p); p[DelayEnable] = 0; p[ReverbMode] = 0; p[HarmMethod] = 1; } },
-        { "Wash + FFT (Standard 2048), 3 voices", [] (ParamSet& p) { base (p); p[DelayEnable] = 0; p[ReverbMode] = 1; p[HarmMethod] = 2; } },
-        { "Wash + FFT (High 4096), 3 voices", [] (ParamSet& p) { base (p); p[DelayEnable] = 0; p[ReverbMode] = 1; p[HarmMethod] = 2; p[Quality] = 2; } },
-        { "Plate + Shift, 6 voices", [] (ParamSet& p) { base (p); p[DelayEnable] = 0; p[ReverbMode] = 0; p[HarmMethod] = 4; } },
-        { "Plate + Resonator (12 partials), 6 voices", [] (ParamSet& p) { base (p); p[DelayEnable] = 0; p[ReverbMode] = 0; p[HarmMethod] = 3; p[RsHarmonics] = 16; } },
+        { "Wash + Classic (32 bands), 3 voices", [] (ParamSet& p) { base (p); p[DelayEnable] = 0; p[ReverbMode] = 1; p[HarmMethod] = 1; } },
+        { "Wash + Classic (48 bands, High quality), 3 voices", [] (ParamSet& p) { base (p); p[DelayEnable] = 0; p[ReverbMode] = 1; p[HarmMethod] = 1; p[ClBands] = 2; p[Quality] = 2; } },
+        { "Plate + Classic (24 bands, Eco), 6 voices", [] (ParamSet& p) { base (p); p[DelayEnable] = 0; p[ReverbMode] = 0; p[HarmMethod] = 1; p[ClBands] = 0; p[Quality] = 0; } },
         { "Interval Clock/Reverse 3 taps + Wash + Classic 48", [] (ParamSet& p) { base (p); p[DelayMode] = 1; p[IvPitchMode] = 1; p[IvDirection] = 2; p[ReverbMode] = 1; p[HarmMethod] = 1; p[ClBands] = 2; } },
-        { "Worst case: BBD+Wash parallel, 2x FFT High, 6 voices", [] (ParamSet& p) { base (p); p[ReverbMode] = 1; p[HarmMethod] = 2; p[Quality] = 2; p[Routing] = 0; } },
+        { "Worst case: BBD+Wash parallel, 2x Classic 48 High, 6 voices", [] (ParamSet& p) { base (p); p[ReverbMode] = 1; p[HarmMethod] = 1; p[ClBands] = 2; p[Quality] = 2; p[Routing] = 0; } },
         { "Worst case: Interval Stable 3 taps + Wash, 2x Classic 48, 6 voices", [] (ParamSet& p) { base (p); p[DelayMode] = 1; p[ReverbMode] = 1; p[HarmMethod] = 1; p[ClBands] = 2; p[Quality] = 2; } },
     };
     std::vector<float> fl, fr;

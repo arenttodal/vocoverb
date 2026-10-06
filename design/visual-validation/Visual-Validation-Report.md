@@ -67,6 +67,13 @@ pictogram sizes, axis label rows, placement split were all corrected from those 
 | Knob shading | Reference outline is heavier on the lower right and the face slightly greyer at the bottom | Outline gradient, bevel, shadow tuned from sampled radial profiles | Knob-crop MAD 11–17 (mostly label/readout anti-aliasing and shading) |
 | Fonts | Reference glyphs are not Inter exactly | Inter 4.0 weights calibrated by cap height and tracking | Glyph shapes differ subtly in every text box |
 
+## Native macOS capture (CI run 37455117141, macos-15, universal build)
+The same fixture captured by the macOS build (CoreGraphics renderer) and compared with the same tool:
+full 12.9 / 12.1 / 12.4, delay graph 10.8 / 7.3 / 6.7, reverb graph 23.5 / 18.9 / 16.0, harmony graph 17.4 / 10.5 / 8.1,
+knob Feedback 13.7 / 14.8 / 15.6 (edges 0.96), preset bar edges 0.99 — within ±1 of the Linux numbers above, so the
+evidence images here represent the Mac editor. UI cost on the macOS runner: graph update + composite 1.3 ms at 1×,
+4.1 ms at 2×; worst-case full-canvas repaint 20 ms at 1×, 69 ms at 2×.
+
 ## Functional checks performed for this revision
 - Core tests 36/36 (new: Classic-only migration + Dry/Wet law; Dry/Wet endpoints 0 % = dry exactly, 100 % = Wet Only,
   50 % bit-identical to the previous blend; click-free switches with a steady final-state reference).

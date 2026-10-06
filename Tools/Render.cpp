@@ -146,7 +146,7 @@ int main (int argc, char** argv)
         { "04-method-classic.wav", "Classic / Matched", "Matched comparison: Classic filter-bank vocoder, breath/noise source.", Fixture::BreathNoise, cMinor, 9.0, {} },
         { "05-classic-48-bands.wav", "Classic 48 / Matched", "Matched comparison: Classic with 48 bands.", Fixture::BreathNoise, cMinor, 9.0, {} },
         { "06-classic-bright.wav", "Classic Bright / Matched", "Matched comparison: Classic with the Bright carrier.", Fixture::BreathNoise, cMinor, 9.0, {} },
-        { "07-classic-hollow.wav", "Classic Hollow / Matched", "Matched comparison: Classic with the Hollow carrier, tonal phrase.", Fixture::HarmonicTone, cMinor, 9.0, {} },
+        { "07-classic-hollow.wav", "Classic Hollow / Matched", "Matched comparison: Classic with the Hollow carrier, breath/noise source.", Fixture::BreathNoise, cMinor, 9.0, {} },
         { "08-before-space-echoes.wav", "Echoes of Chords", "Before Space: chords imprinted then echoed (older chords keep echoing).", Fixture::BreathNoise, cMinor, 10.0, {} },
         { "09-after-space-echoes.wav", "Revoice the Echo", "After Space: the existing BBD repeats follow the new chords.", Fixture::BreathNoise, cMinor, 10.0, {} },
         { "10-freeze-revoice.wav", "Frozen Choir", "Freeze at 3.4 s, then four chord changes over the frozen wash.", Fixture::BreathNoise, freezeRevoice, 12.0, {} },
