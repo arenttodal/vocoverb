@@ -67,6 +67,52 @@ pictogram sizes, axis label rows, placement split were all corrected from those 
 | Knob shading | Reference outline is heavier on the lower right and the face slightly greyer at the bottom | Outline gradient, bevel, shadow tuned from sampled radial profiles | Knob-crop MAD 11–17 (mostly label/readout anti-aliasing and shading) |
 | Fonts | Reference glyphs are not Inter exactly | Inter 4.0 weights calibrated by cap height and tracking | Glyph shapes differ subtly in every text box |
 
+## Proportions pass (after GUI v2)
+Deliberate departures from the raster, requested after review: smaller brand and section titles, compact Dry/Wet,
+preset bar and bottom buttons. Before / after crops: `proportions/` (top = before, bottom = after;
+`full-overlay-before-after.png` is a 50 % blend). Measured on the native capture (canvas px):
+
+| Item | Before | After |
+|---|---|---|
+| Title PLAYABLE (heavy) / AMBIENCE (regular) | cap 27 px (≈ 37 px em) | 28 px em, cap height 20 px |
+| Subtitle | cap 9 px (≈ 12 px em) | 9.75 px em (cap 7 px), ~2.75 px tracking, 7 px below the title |
+| DELAY / REVERB / HARMONY | cap 18 px (≈ 25 px em) | 20.5 px em, cap 15 px, identical for all three, centred on the header lines y 146 / 662 |
+| Section dot | 17 px | 13 px visible, ~10 px gap to the title |
+| Dry/Wet | 59 px face | 44 px face, 54 px tick ring; caption 10.5 px em, 4 px ring → label, 2 px label → value |
+| Preset bar / A/B | 52 / 34 px high | 40 / 29 px |
+| Utility icons (load, save, gear, panic, tail kill) | 27–31 px boxes | 18–21 px visible in 32 px hit areas |
+| Bottom buttons | 2 × 2 incl. ADVANCED, 136–141 × 44–47 | Latch, Freeze 110 × 33; Wet Only 228 × 33 (full width); 8 px gaps; 11.75 px em medium labels |
+
+Preserved: a pixel diff of the reference-fixture capture before and after shows **0 changed pixels** (> 8 levels) in
+the delay, reverb and harmony graphs, all 14 macro knobs and the keyboard (routing strip: 4 anti-aliasing pixels).
+The region metrics above therefore change only for the header, Dry/Wet, preset bar and performance crops, which
+now differ from the raster on purpose (current `compare/metrics.json`: full 13.5 / 13.1 / 13.5, header 16.7 / 16.8 /
+18.4, preset bar 13.4 / 15.4 / 18.2, Dry/Wet crop 23.0 / 26.2 / 28.8, keyboard + performance 21.9 / 25.5 / 27.8;
+every graph and macro-knob region is unchanged from the table above).
+
+## Contextual settings redesign (check report)
+The Advanced overlay is retired; see `docs/GUI-Implementation-Note.md` for the parameter-location map and the
+migration table. Captures (native editor, `capture/`): `detail-bbd`, `detail-interval-{taps,pitch,character}`,
+`detail-plate`, `detail-wash`, `detail-harmony-{chord,intervals,arp,midi,voice,vocoder}`, `detail-closed-graphs-live`,
+`settings-{midi,audio,support}`. BBD, Plate and Wash fit their graph rectangle (704 × 215) without scrolling;
+the Harmony pages fit 912 × 160; every Settings page fits 470 × 480.
+
+| # | Acceptance path | Result |
+|---|---|---|
+| 1 | Open Reverb settings, change Diffusion / Size | Sliders are the real `plDiffusion` / `plSize` parameters (host gestures, automation, presets) |
+| 2 | Switch Plate ↔ Wash with Reverb settings open | View rebuilds for the new mode (self-test: PLATE → WASH SETTINGS) |
+| 3 | Open Delay settings while Reverb settings are open | Reverb returns to its graph; one view at a time (self-test) |
+| 4 | Sync and division | SYNC in the Delay settings heading; TIME macro shows the division when synced |
+| 5 | BBD → Interval with Delay settings open | View rebuilds with TAPS / PITCH / CHARACTER (self-test) |
+| 6 | Harmony chord / arp | Chord badge opens Harmony settings on the source page; Arp page follows FREE / SYNC (rate vs free rate) |
+| 7 | Graphs live on return | Hidden graphs are not drawn; they rebuild from the live history on return (`detail-closed-graphs-live`) |
+| 8 | Settings panel | Gear toggles it; pages MIDI / SETUP, AUDIO, SUPPORT; anchored under the gear, inside the editor, no scrim |
+| 9 | Outside click / Escape | Outside click hits the catcher layer, not the Dry/Wet or Feedback knob below (self-test, parameter unchanged); Esc closes the panel, then an open effect view |
+| 10 | Presets / A-B while open | A/B recall with Delay settings open follows the slot's mode (self-test); presets reload the same way |
+
+Not verified here: pointer interaction on a real Mac or in a DAW (the checks above drive the same code paths
+headlessly), VoiceOver reading order.
+
 ## Native macOS capture (CI run 37455117141, macos-15, universal build)
 The same fixture captured by the macOS build (CoreGraphics renderer) and compared with the same tool:
 full 12.9 / 12.1 / 12.4, delay graph 10.8 / 7.3 / 6.7, reverb graph 23.5 / 18.9 / 16.0, harmony graph 17.4 / 10.5 / 8.1,
@@ -78,7 +124,8 @@ evidence images here represent the Mac editor. UI cost on the macOS runner: grap
 - Core tests 36/36 (new: Classic-only migration + Dry/Wet law; Dry/Wet endpoints 0 % = dry exactly, 100 % = Wet Only,
   50 % bit-identical to the previous blend; click-free switches with a steady final-state reference).
 - Standalone self-test 37/37 including legacy sessions (Off → harmony off, FFT → Classic, missing mix → 50 %),
-  A/B, presets, export, editor captures at default/minimum/large/2x, open-menu and chord call-out renders.
+  A/B, presets, export, editor captures at default/minimum/large/2x, open-menu render. Now 53 checks including the
+  contextual-settings checks listed above.
 - Host MIDI check (VST3 on Linux here; VST3 + both AUs on macOS CI): MIDI still changes the output, same RMS as before.
 - pluginval v1.0.4 strictness 8 on the Linux VST3 (editor included): SUCCESS. macOS auval/pluginval run in CI.
 - UI cost (Linux software renderer): one graph update + repaint ≈ 1–4.5 ms at 1×, 6–11 ms at 2× when full of light;

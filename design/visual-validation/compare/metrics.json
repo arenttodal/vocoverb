@@ -1,41 +1,41 @@
 {
  "reference": "references/playable-ambience-approved-gui.png",
- "capture": "/tmp/claude-0/vis/shots/reference-fixture-1536x1024.png",
+ "capture": "/tmp/claude-0/-home-user-vocoverb/9ccc29e8-a3fc-57e0-8fd3-5a378103ad1b/scratchpad/v4/shots/reference-fixture-1536x1024.png",
  "captureScale": 1.0,
  "regions": {
   "full": {
    "meanAbsDiffRGB": [
-    12.76,
-    12.02,
-    12.26
+    13.47,
+    13.13,
+    13.48
    ]
   },
   "header": {
    "meanAbsDiffRGB": [
-    14.33,
-    14.13,
-    15.63
+    16.68,
+    16.82,
+    18.43
    ],
-   "refEdgesMatched": 0.871,
-   "captureEdgesMatched": 0.909
+   "refEdgesMatched": 0.583,
+   "captureEdgesMatched": 0.703
   },
   "delay-card": {
    "meanAbsDiffRGB": [
-    8.95,
-    7.89,
-    8.03
+    9.54,
+    8.51,
+    8.67
    ],
-   "refEdgesMatched": 0.842,
-   "captureEdgesMatched": 0.95
+   "refEdgesMatched": 0.824,
+   "captureEdgesMatched": 0.941
   },
   "reverb-card": {
    "meanAbsDiffRGB": [
-    15.22,
-    13.59,
-    12.69
+    15.73,
+    14.14,
+    13.25
    ],
-   "refEdgesMatched": 0.881,
-   "captureEdgesMatched": 0.937
+   "refEdgesMatched": 0.867,
+   "captureEdgesMatched": 0.932
   },
   "delay-graph": {
    "meanAbsDiffRGB": [
@@ -70,12 +70,12 @@
   },
   "harmony-header": {
    "meanAbsDiffRGB": [
-    8.11,
-    9.82,
-    11.36
+    11.54,
+    13.7,
+    15.39
    ],
-   "refEdgesMatched": 0.977,
-   "captureEdgesMatched": 0.978
+   "refEdgesMatched": 0.87,
+   "captureEdgesMatched": 0.931
   },
   "harmony-graph": {
    "meanAbsDiffRGB": [
@@ -99,12 +99,12 @@
   },
   "keyboard-perf": {
    "meanAbsDiffRGB": [
-    21.17,
-    21.99,
-    23.45
+    21.91,
+    25.5,
+    27.78
    ],
-   "refEdgesMatched": 0.69,
-   "captureEdgesMatched": 0.798
+   "refEdgesMatched": 0.578,
+   "captureEdgesMatched": 0.736
   },
   "knob-feedback": {
    "meanAbsDiffRGB": [
@@ -135,30 +135,30 @@
   },
   "knob-drywet": {
    "meanAbsDiffRGB": [
-    16.81,
-    18.75,
-    20.86
+    23.01,
+    26.19,
+    28.77
    ],
-   "refEdgesMatched": 0.846,
-   "captureEdgesMatched": 0.894
+   "refEdgesMatched": 0.536,
+   "captureEdgesMatched": 0.708
   },
   "dropdown-bbd": {
    "meanAbsDiffRGB": [
-    6.3,
-    7.2,
-    9.34
+    9.46,
+    10.31,
+    12.53
    ],
-   "refEdgesMatched": 1.0,
-   "captureEdgesMatched": 0.998
+   "refEdgesMatched": 0.888,
+   "captureEdgesMatched": 0.994
   },
   "preset-bar": {
    "meanAbsDiffRGB": [
-    8.27,
-    9.85,
-    12.41
+    13.35,
+    15.41,
+    18.18
    ],
-   "refEdgesMatched": 0.982,
-   "captureEdgesMatched": 0.921
+   "refEdgesMatched": 0.604,
+   "captureEdgesMatched": 0.584
   }
  }
 }

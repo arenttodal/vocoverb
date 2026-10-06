@@ -207,7 +207,7 @@ bool HarmonyKeyboard::keyStateChanged (bool)
 Wheel::Wheel (PluginProcessor& p, bool pitch) : proc (p), isPitch (pitch), value (pitch ? 0.0f : 0.0f)
 {
     setTitle (pitch ? "Pitch wheel" : "Mod wheel");
-    setTooltip (pitch ? "Pitch bend for harmony voices (range in Advanced > MIDI). Springs back." : "Mod wheel: adds to Harmony Depth or Motion (Advanced > MIDI).");
+    setTooltip (pitch ? "Pitch bend for harmony voices (range: Settings > MIDI / Setup). Springs back." : "Mod wheel: adds to Harmony Depth or Motion (target: Settings > MIDI / Setup).");
 }
 
 void Wheel::paint (juce::Graphics& g)

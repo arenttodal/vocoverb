@@ -280,9 +280,6 @@ struct SelfTest
                             lf.drawPopupMenuItem (g, { 0, 5 + k * ih, w, ih }, false, true, k == 2, k == 1, false, items[k], {}, nullptr, nullptr);
                         save (img, sc > 1.5f ? "menu-source-open-2x" : "menu-source-open");
                     }
-                    pp->setValue (NoteSource, 1);
-                    auto panel = pe->createSourceSettingsForSnapshot();
-                    if (panel != nullptr) save (panel->createComponentSnapshot (panel->getLocalBounds(), true, 2.0f), "callout-chord-settings-2x");
                 }
                 // (b2) UI cost: full main-view repaint with live graph data (software renderer, 1x and 2x)
                 {
@@ -310,6 +307,7 @@ struct SelfTest
                             std::vector<std::pair<double, juce::String>> costs;
                             for (auto* c : pe->mainView()->getChildren())
                             {
+                                if (! c->isVisible()) continue; // closed settings views cost nothing
                                 auto b0 = juce::Time::getMillisecondCounterHiRes();
                                 for (int r = 0; r < 5; ++r) { if (auto* gw = dynamic_cast<GraphWell*> (c)) gw->markDirty(); auto im = c->createComponentSnapshot (c->getLocalBounds(), true, sc); juce::ignoreUnused (im); }
                                 costs.push_back ({ (juce::Time::getMillisecondCounterHiRes() - b0) / 5.0, c->getTitle() + "/" + c->getName() + " " + c->getBounds().toString() });
@@ -339,13 +337,102 @@ struct SelfTest
                         save (ed->createComponentSnapshot (ed->getLocalBounds(), true, sh.scale), sh.name);
                     }
                     ed->setSize (iw, ih);
-                    for (auto* tab : { "Harmony", "Delay", "MIDI", "Mix / Timing", "Diagnostics" })
+                    pe->refreshForSnapshot();
+                    // contextual effect settings (canonical canvas) for every mode / source / page
+                    struct DetailShot { int effect, page; std::vector<std::pair<int, float>> set; const char* name; };
+                    const std::vector<DetailShot> shots {
+                        { 0, 0, { { DelayMode, 0 } }, "detail-bbd" },
+                        { 0, 0, { { DelayMode, 1 } }, "detail-interval-taps" },
+                        { 0, 1, { { DelayMode, 1 } }, "detail-interval-pitch" },
+                        { 0, 2, { { DelayMode, 1 } }, "detail-interval-character" },
+                        { 1, 0, { { DelayMode, 0 }, { ReverbMode, 0 } }, "detail-plate" },
+                        { 1, 0, { { ReverbMode, 1 } }, "detail-wash" },
+                        { 2, 0, { { NoteSource, 1 } }, "detail-harmony-chord" },
+                        { 2, 0, { { NoteSource, 2 } }, "detail-harmony-intervals" },
+                        { 2, 0, { { NoteSource, 3 }, { ArpSync, 1 } }, "detail-harmony-arp" },
+                        { 2, 0, { { NoteSource, 0 } }, "detail-harmony-midi" },
+                        { 2, 1, { { NoteSource, 1 } }, "detail-harmony-voice" },
+                        { 2, 2, { { NoteSource, 1 } }, "detail-harmony-vocoder" } };
+                    for (auto& sh : shots)
                     {
-                        pe->showAdvancedForSnapshot (tab);
-                        save (ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f), "advanced-" + juce::File::createLegalFileName (juce::String (tab).replace (" / ", "-")));
+                        for (auto [i, v] : sh.set) pp->setValue (i, v);
+                        run (2);
+                        pe->showEffectSettings (sh.effect, sh.page);
+                        run (3);
+                        save (pe->snapshotCanvas (1.0f), sh.name);
                     }
-                    pe->showAdvancedForSnapshot ({});
+                    save (pe->snapshotCanvas (2.0f), "detail-harmony-vocoder-2x");
+                    pe->showEffectSettings (-1);
+                    run (3);
+                    save (pe->snapshotCanvas (1.0f), "detail-closed-graphs-live");
+                    for (int pg = 0; pg < 3; ++pg)
+                    {
+                        pe->showSettings (pg);
+                        run (2);
+                        save (ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f), juce::String ("settings-") + juce::StringArray { "midi", "audio", "support" }[pg]);
+                    }
+                    save (ed->createComponentSnapshot (ed->getLocalBounds(), true, 2.0f), "settings-support-2x");
+                    pe->showSettings (-1);
                 }
+            }
+            // 6b. contextual settings: one effect view at a time, mode-following content, Escape / outside click behaviour
+            if (pe != nullptr)
+            {
+                auto tick = [&] (int frames) { for (int k = 0; k < frames; ++k) { for (int b = 0; b < 8; ++b) { buf.clear(); proc->processBlock (buf, midi); } pe->tickForSnapshot(); } };
+                pp->setValue (ReverbMode, 0);
+                pe->showEffectSettings (1);
+                tick (2);
+                const bool plate = pe->openEffectSettings() == 1 && pe->effectSettingsTitle (1) == "PLATE SETTINGS";
+                pp->setValue (ReverbMode, 1);
+                tick (2);
+                const bool wash = pe->effectSettingsTitle (1) == "WASH SETTINGS";
+                pe->showEffectSettings (0);
+                const bool one = pe->openEffectSettings() == 0;
+                pp->setValue (DelayMode, 1);
+                tick (2);
+                const bool interval = pe->effectSettingsTitle (0) == "INTERVAL SETTINGS";
+                pp->setValue (DelayMode, 0);
+                tick (2);
+                pe->keyPressed (juce::KeyPress (juce::KeyPress::escapeKey));
+                const bool esc = pe->openEffectSettings() == -1;
+                check (plate && wash && one && interval && esc, "effect settings: Plate -> Wash and BBD -> Interval follow the mode, one open at a time, Escape returns to the graph");
+                // A/B switch while a settings view is open: the view follows the recalled mode, the graph comes back on close
+                {
+                    auto& pm = pp->presets();
+                    pm.switchAB (0); pp->setValue (DelayMode, 0);
+                    pm.switchAB (1); pp->setValue (DelayMode, 1);
+                    pm.switchAB (0);
+                    pe->showEffectSettings (0);
+                    tick (2);
+                    const bool a = pe->effectSettingsTitle (0) == "BBD SETTINGS";
+                    pm.switchAB (1);
+                    tick (2);
+                    const bool b = pe->effectSettingsTitle (0) == "INTERVAL SETTINGS";
+                    pm.switchAB (0);
+                    pe->showEffectSettings (-1);
+                    check (a && b && pe->openEffectSettings() == -1, "A/B recall while Delay settings are open: the view follows the slot's mode");
+                }
+                pe->showSettings (1);
+                // a point over the Dry/Wet knob (canvas 1450, 62) and one over the Feedback knob must hit the outside-click layer
+                const float sc = (float) ed->getWidth() / (float) theme::kCanvasW;
+                const int top = ed->getHeight() - (int) std::lround (theme::kCanvasH * sc);
+                const float mixBefore = pp->value (Mix);
+                const bool wasVisible = ed->isVisible();
+                ed->setVisible (true); // hit testing only considers visible components (the editor has no window here)
+                auto* hitA = ed->getComponentAt (juce::Point<int> ((int) (245 * sc), top + (int) (459 * sc)));
+                auto* hitB = ed->getComponentAt (juce::Point<int> ((int) (1450 * sc), top + (int) (62 * sc)));
+                const bool blocked = hitA != nullptr && hitA->getName() == "settings-outside-click" && (hitB == nullptr || hitB->getName() == "settings-outside-click"
+                                                                                                       || hitB->findParentComponentOfClass<SettingsPanel>() != nullptr);
+                ed->setVisible (wasVisible);
+                if (! blocked) log.add ("      hit A: " + (hitA ? juce::String (typeid (*hitA).name()) + " '" + hitA->getName() + "' " + hitA->getBounds().toString() : juce::String ("none"))
+                                        + "  hit B: " + (hitB ? juce::String (typeid (*hitB).name()) + " '" + hitB->getName() + "'" : juce::String ("none")) + " open " + juce::String ((int) pe->settingsOpen()));
+                pe->keyPressed (juce::KeyPress (juce::KeyPress::escapeKey));
+                check (blocked && ! pe->settingsOpen() && pp->value (Mix) == mixBefore, "Settings panel: outside clicks are caught (no obscured parameter changes), Escape closes it");
+                pe->showDestination ("Mix / Timing");
+                const bool routed = pe->settingsOpen();
+                pe->showDestination ("Harmony");
+                check (routed && ! pe->settingsOpen() && pe->openEffectSettings() == 2, "retired Advanced destinations route to Settings / Harmony settings");
+                pe->showDestination ({});
             }
         }
         log.add (failures == 0 ? "SELFTEST PASSED" : "SELFTEST FAILED (" + juce::String (failures) + ")");

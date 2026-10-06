@@ -31,7 +31,7 @@ struct ParamInfo
 // X(ENUM, id, name, kind, min, max, default, centre, unit, choices, group, help)
 #define PA_PARAMS(X) \
  X(DryLevel, "dryLevel", "Dry Level", Float, -60, 6, 0, -12, "dB", "", "Mix", "Unprocessed source level. Only this gain (and Studio alignment delay) touches the dry signal. -60 = off.") \
- X(WetLevel, "wetLevel", "Wet Level", Float, -60, 6, -9, -12, "dB", "", "Mix", "Final ambience (wet return) level (Advanced > Mix / Timing). It never affects the dry signal; the header DRY / WET knob blends dry against wet.") \
+ X(WetLevel, "wetLevel", "Wet Level", Float, -60, 6, -9, -12, "dB", "", "Mix", "Final ambience (wet return) level (Settings > Audio). It never affects the dry signal; the header DRY / WET knob blends dry against wet.") \
  X(WetOnly, "wetOnly", "Wet Only", Bool, 0, 1, 0, 0, "", "", "Mix", "Removes the dry signal completely. Use on return/send tracks or when the source track stays audible.") \
  X(WetTrim, "wetTrim", "Wet Trim", Float, -12, 12, 0, 0, "dB", "", "Mix", "Wet-only trim used by the A/B loudness match. Bounded to +/-12 dB.") \
  X(InputSource, "inputSource", "Input Source", Choice, 0, 2, 0, 0, "", "Main + Sidechain|Main Only|Sidechain Only", "Mix", "Which input buses feed the effect. Logic MIDI-controlled AU: audio arrives on the sidechain.") \

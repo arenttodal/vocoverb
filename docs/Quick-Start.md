@@ -15,22 +15,25 @@ change the chord of the remaining tail with the keys.
 - Click keys on the on-screen keyboard (or play a MIDI controller). With **Hold Last** (default) the last chord
   stays after you lift your hands. The keyboard and the chord readout show the notes actually voiced.
 - Or pick **Chord**, **Intervals** or **Arp** in the Harmony card's **SOURCE** dropdown. Click the chord badge
-  (e.g. **C MINOR**) to edit the stored chord (root, quality, octave, inversion, voicing, 8 snapshots), the interval
-  set or the arpeggiator. The three small buttons next to the dropdown choose what happens with no keys held:
+  (e.g. **C MINOR**) to open Harmony settings on the source page: the stored chord (root, quality, octave, inversion,
+  voicing, 8 snapshots), the interval set or the arpeggiator. The three small buttons next to the dropdown choose what happens with no keys held:
   **pin** = Hold Last, **wave** = Release, **cloud** = Ambient.
 - No keys yet? A fresh preset with Hold Last uses its stored chord (C minor in most presets).
 
 ## 3. Compare
 - Turn **DEPTH** up: 0 % = ordinary ambience, 100 % = only the harmonised wet.
 - Turn harmony off and on with the orange dot next to **HARMONY** (off = ordinary ambience). The harmony is the
-  Classic filter-bank vocoder; its bands, envelopes and carrier are under the Harmony card's **⋮** menu.
+  Classic filter-bank vocoder; its voices, bands and envelopes are in **Harmony settings** (the sliders icon at the
+  right of the Harmony header). Each card has the same icon: the settings replace that card's graph until you click
+  **GRAPH**, the icon again, or press Esc. Only one card shows its settings at a time; the sound never pauses.
 - **DRY / WET** (top right) blends the untouched source against the ambience: 50 % keeps both at full level,
-  0 % = dry only, 100 % = wet only. The ambience output level and the dry level are in the gear (Settings) panel.
+  0 % = dry only, 100 % = wet only. The ambience output level and the dry level are in the gear: **Settings > Audio**.
 - Compare **AFTER SPACE** (the existing tail follows new chords) and **BEFORE SPACE** (chords are imprinted, then echo).
 - Compare the routing pictograms (**parallel**, **D → R**, **R → D**) and the BBD/Interval and Plate/Wash dropdowns.
 - The displays show the last few seconds since a phrase started (0 s = the onset); when everything is silent they
   show a dim preview of the current delay pattern and decay.
-- Use **A / B** in the header; Advanced > Mix / Timing has Copy A>B and a bounded wet loudness match.
+- Use **A / B** in the header; **Settings > Audio** has Copy A>B, a bounded wet loudness match (MATCH B) and whether
+  A/B switching clears the tail.
 - The SOURCE menu has **Experiments** (e.g. *C minor > A-flat > F minor*, *Freeze / Revoice*) with fixed timing
   markers so comparisons are repeatable.
 
@@ -81,12 +84,12 @@ wait for the transport to stop. Without any MIDI, a fresh preset plays its store
 ## 9. Troubleshooting
 - **Silent harmony?** The carrier never sounds without audio: you need input audio or a ringing/frozen tail.
   Check the IN meter, the source strip, and the chord readout (NO NOTES = check the no-note policy or press keys).
-- **MIDI not arriving?** The text next to the MIDI dot in the Harmony card tells you what the plug-in receives
-  (*No MIDI yet* / *MIDI IN ch.. last ..* / *dropped by the channel filter*). In Live use the **VST3** and pick
+- **MIDI not arriving?** **Settings > MIDI / Setup** (and the SOURCE dropdown tooltip) tells you what the plug-in
+  receives (*No MIDI yet* / *MIDI in: ch .., last ..* / *dropped by the channel filter*). In Live use the **VST3** and pick
   *Playable Ambience* in the MIDI track's lower **MIDI To** menu with Monitor = In (section 7); in Logic use the
-  MIDI-controlled AU with Side Chain (section 8). Advanced > MIDI has the channel filter (Omni by default).
+  MIDI-controlled AU with Side Chain (section 8). Settings > MIDI / Setup has the channel filter (Omni by default).
 - **Stuck notes:** the **!** button (Panic) releases all notes; the wave-cross button (Tail Kill) also clears tails.
 - **Plugin missing:** run the installer, then rescan (Live) or restart Logic; check Logic's Plug-in Manager.
-- **CPU / clicks:** Advanced > Mix / Timing > Quality (Eco), larger buffer in Audio / MIDI; Advanced > Diagnostics
-  shows processing time.
+- **CPU / clicks:** Settings > Audio > Quality (Eco), larger buffer in Audio / MIDI; Settings > Support shows
+  processing time.
 - **Blocked by Gatekeeper:** see step 1–2; nothing here requires disabling Gatekeeper.

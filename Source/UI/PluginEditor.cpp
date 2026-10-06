@@ -2,6 +2,7 @@
 
 #include "BuildInfo.h"
 #include "Presets/PresetManager.h"
+#include "SettingsViews.h"
 #include "StandalonePanel.h"
 
 namespace pa
@@ -27,30 +28,6 @@ float trackingToFit (juce::Font f, const juce::String& text, float targetW)
     const int gaps = std::max (1, text.length() - 1);
     return (targetW - w0) / ((float) gaps * f.getHeight());
 }
-
-/** Text button with an icon at its left (ADVANCED). */
-class IconTextButton : public juce::TextButton
-{
-public:
-    IconTextButton (const juce::String& t, IconButton::Icon i) : juce::TextButton (t), icon (i) {}
-    void paintButton (juce::Graphics& g, bool highlighted, bool down) override
-    {
-        getLookAndFeel().drawButtonBackground (g, *this, {}, highlighted, down);
-        const auto c = isEnabled() ? theme::text : theme::textDisabled;
-        // 15.5 px icon, 7.5 px gap, label; the pair is centred in the button
-        const auto f = theme::capFont ((float) getProperties().getWithDefault ("capPx", 8.55), 1);
-        constexpr float iconW = 15.5f, gapW = 7.5f;
-        const float tw = juce::GlyphArrangement::getStringWidth (f, getButtonText());
-        const float x0 = ((float) getWidth() - (iconW + gapW + tw)) * 0.5f;
-        IconButton::drawIcon (g, icon, juce::Rectangle<float> (iconW, 14.0f).withCentre ({ x0 + iconW * 0.5f, (float) getHeight() * 0.5f }), c, false, 1.4f);
-        g.setColour (c);
-        g.setFont (f);
-        g.drawText (getButtonText(), juce::Rectangle<float> (x0 + iconW + gapW, 0.0f, tw + 4.0f, (float) getHeight()), juce::Justification::centredLeft, false);
-    }
-
-private:
-    IconButton::Icon icon;
-};
 
 /** Transparent text button (preset name). */
 class PlainTextButton : public juce::Button
@@ -82,83 +59,6 @@ public:
     }
 };
 
-/** Source-specific settings shown in a call-out from the chord badge (all former source-bar controls). */
-class SourceSettings : public juce::Component
-{
-public:
-    explicit SourceSettings (PluginProcessor& p)
-        : proc (p), chRoot (p, ChRoot), chQuality (p, ChQuality), chSpread (p, ChSpread), intRef (p, IntRefSource), intMode (p, IntMode), intKey (p, IntKey),
-          intScale (p, IntScale), arpMode (p, ArpMode), arpRate (p, ArpRate), chOct (p, ChOctave), chInv (p, ChInversion), intRoot (p, IntRoot), intCount (p, IntCount),
-          arpOct (p, ArpOctaves), arpSync (p, ArpSync, "SYNC"), policy (&p, NoNotePolicy, { "HOLD LAST", "RELEASE", "AMBIENT" })
-    {
-        src = (int) p.value (NoteSource);
-        intRoot.prefix = "ROOT"; chOct.prefix = "OCT"; chInv.prefix = "INV"; intCount.prefix = "COUNT"; arpOct.prefix = "OCT";
-        for (int i = 0; i < 8; ++i)
-        {
-            snap[i].setButtonText (juce::String (i + 1));
-            snap[i].setTooltip ("Chord snapshot " + juce::String (i + 1) + " (click to recall; arm STORE first; MIDI Program Change " + juce::String (i) + ")");
-            snap[i].onClick = [this, i] {
-                if (storeArm.getToggleState()) { proc.storeSnapshot (i); storeArm.setToggleState (false, juce::dontSendNotification); }
-                else proc.recallSnapshot (i);
-            };
-        }
-        storeArm.setClickingTogglesState (true);
-        storeArm.setTooltip ("Arm, then click a snapshot number to store the current chord into it");
-        arpGate.setSliderStyle (juce::Slider::LinearHorizontal);
-        arpGate.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
-        arpGateAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, paramInfo (ArpGate).id, arpGate);
-        arpGate.setTooltip ("Arp gate length");
-        switch (src)
-        {
-            case 1: for (juce::Component* c : std::initializer_list<juce::Component*> { &chRoot, &chQuality, &chOct, &chInv, &chSpread, &storeArm }) addAndMakeVisible (c);
-                    for (auto& s : snap) addAndMakeVisible (s);
-                    title = "STORED CHORD"; break;
-            case 2: for (juce::Component* c : std::initializer_list<juce::Component*> { &intRoot, &intRef, &intMode, &intKey, &intScale, &intCount }) addAndMakeVisible (c);
-                    title = "INTERVALS  (offsets: Advanced > MIDI)"; break;
-            case 3: for (juce::Component* c : std::initializer_list<juce::Component*> { &arpMode, &arpRate, &arpSync, &arpOct, &arpGate }) addAndMakeVisible (c);
-                    title = "ARPEGGIATOR"; break;
-            default: addAndMakeVisible (policy); title = "MIDI  -  what happens when no keys are held"; break;
-        }
-        setSize (600, 96);
-    }
-    void paint (juce::Graphics& g) override
-    {
-        g.setColour (theme::textMuted);
-        g.setFont (theme::capFont (8.5f, 1, 0.08f));
-        g.drawText (title, getLocalBounds().removeFromTop (24).reduced (12, 0), juce::Justification::centredLeft);
-    }
-    void resized() override
-    {
-        auto r = getLocalBounds().reduced (12, 0).withTrimmedTop (26);
-        auto row = r.removeFromTop (30);
-        auto place = [&row] (juce::Component& c, int w) { c.setBounds (row.removeFromLeft (std::min (w, row.getWidth())).reduced (0, 1)); row.removeFromLeft (6); };
-        switch (src)
-        {
-            case 1:
-                place (chRoot, 70); place (chQuality, 100); place (chOct, 92); place (chInv, 86); place (chSpread, 92);
-                row = r.withTrimmedTop (6).removeFromTop (28);
-                for (auto& s : snap) place (s, 30);
-                place (storeArm, 66);
-                break;
-            case 2: place (intRoot, 112); place (intRef, 120); place (intMode, 104); place (intKey, 60); place (intScale, 150); break;
-            case 3: place (arpMode, 110); place (arpRate, 76); place (arpSync, 60); place (arpOct, 90); place (arpGate, 150); break;
-            default: place (policy, 330); break;
-        }
-        if (src == 2) { row = r.withTrimmedTop (6).removeFromTop (28); place (intCount, 104); }
-    }
-
-private:
-    PluginProcessor& proc;
-    int src = 0;
-    juce::String title;
-    ParamCombo chRoot, chQuality, chSpread, intRef, intMode, intKey, intScale, arpMode, arpRate;
-    ParamStepper chOct, chInv, intRoot, intCount, arpOct;
-    ParamToggleButton arpSync;
-    Segmented policy;
-    juce::TextButton snap[8], storeArm { "STORE" };
-    juce::Slider arpGate;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> arpGateAttach;
-};
 } // namespace
 
 // ======================================================================================== MainView
@@ -171,6 +71,11 @@ public:
     void update();                    // ~30 Hz
     void refreshPresetName();
     void setReferenceFixture (bool on) { fixtureMode = on; dGraph.setReferenceFixture (on); rGraph.setReferenceFixture (on); hGraph.setReferenceFixture (on); }
+    /** Shows one effect's settings in place of its graph (0 delay, 1 reverb, 2 harmony; -1 = all graphs). Only one at a time. */
+    void showDetail (int which, int page = -1);
+    int openDetail() const noexcept { return detailOpen; }
+    juce::String detailTitle (int i) const { return details[juce::jlimit (0, 2, i)]->titleText(); }
+    void setSettingsButtonOn (bool on) { gearBtn.setToggleState (on, juce::dontSendNotification); }
 
     LevelMeter inMeter { "IN" }, outMeter { "OUT" };
 
@@ -179,7 +84,6 @@ private:
     void savePresetDialog();
     void bindModeKnobs();
     void paintStatic (juce::Graphics& g);
-    juce::String midiStatusText() const;
 
     PluginProcessor& proc;
     PluginEditor& editor;
@@ -189,7 +93,7 @@ private:
     // header
     IconButton prevPreset { IconButton::Icon::Prev, "Previous preset" }, nextPreset { IconButton::Icon::Next, "Next preset" },
         heart { IconButton::Icon::Heart, "Favourite this preset" }, loadBtn { IconButton::Icon::Folder, "Load a preset file" },
-        saveBtn { IconButton::Icon::Save, "Save user preset" }, gearBtn { IconButton::Icon::Gear, "Settings: mix, output and dry levels, timing, quality, diagnostics" };
+        saveBtn { IconButton::Icon::Save, "Save user preset" }, gearBtn { IconButton::Icon::Gear, "Settings: MIDI / setup, audio, support" };
     PlainTextButton presetName;
     Segmented abSeg { nullptr, -1, { "A", "B" } };
     ParamKnob mixKnob;
@@ -197,7 +101,7 @@ private:
     // delay
     EnableDot dDot;
     ParamCombo dMode;
-    IconButton dMenu { IconButton::Icon::Kebab, "Delay settings (all BBD / Interval parameters, freeze)" };
+    IconButton dMenu { IconButton::Icon::Sliders, "Delay settings" };
     DelayView dGraph;
     ParamToggleButton bbdSync, ivSync;
     std::unique_ptr<ParamKnob> dk[5];
@@ -205,7 +109,7 @@ private:
     // reverb
     EnableDot rDot;
     ParamCombo rMode;
-    IconButton rMenu { IconButton::Icon::Kebab, "Reverb settings (all Plate / Wash parameters)" };
+    IconButton rMenu { IconButton::Icon::Sliders, "Reverb settings" };
     ReverbView rGraph;
     std::unique_ptr<ParamKnob> rk[5];
 
@@ -218,7 +122,7 @@ private:
     ChordBadge chordBadge;
     ParamCombo source;
     ChoiceIconButton polHold, polRelease, polAmbient;
-    IconButton hMenu { IconButton::Icon::Kebab, "Harmony settings (Classic bands, envelopes, carrier, notes, MIDI)" };
+    IconButton hMenu { IconButton::Icon::Sliders, "Harmony settings" };
     HarmonyView hGraph;
     std::unique_ptr<ParamKnob> hk[4];
     juce::Label hint;
@@ -227,9 +131,12 @@ private:
     Wheel pitchWheel, modWheel;
     HarmonyKeyboard keyboard;
     ParamToggleButton latch, freeze, wetOnly;
-    IconTextButton advancedBtn { "ADVANCED", IconButton::Icon::Sliders };
     IconButton panic { IconButton::Icon::Panic, "Panic: release all notes (latched, held, arp)" },
         tailKill { IconButton::Icon::TailKill, "Tail Kill: release notes and clear all wet tails (short fade, dry untouched)" };
+
+    // contextual settings: each replaces its effect's graph rectangle while open
+    std::unique_ptr<EffectDetail> details[3];
+    int detailOpen = -1;
 
     juce::Image staticLayer;
     float staticScale = -1.0f;
@@ -260,7 +167,7 @@ MainView::MainView (PluginProcessor& p, PluginEditor& e)
     for (juce::Component* c : std::initializer_list<juce::Component*> { &prevPreset, &nextPreset, &heart, &loadBtn, &saveBtn, &gearBtn, &presetName, &abSeg, &mixKnob,
                                 &inMeter, &outMeter, &dDot, &dMode, &dMenu, &dGraph, &bbdSync, &ivSync, &rDot, &rMode, &rMenu, &rGraph,
                                 &routeParallel, &routeDR, &routeRD, &placement, &hDot, &chordBadge, &source, &polHold, &polRelease, &polAmbient, &hMenu, &hGraph, &hint,
-                                &pitchWheel, &modWheel, &keyboard, &latch, &freeze, &wetOnly, &advancedBtn, &panic, &tailKill })
+                                &pitchWheel, &modWheel, &keyboard, &latch, &freeze, &wetOnly, &panic, &tailKill })
         addAndMakeVisible (c);
 
     const int dInit[5] = { BbdTime, BbdFeedback, BbdTone, BbdAge, BbdLevel };
@@ -288,27 +195,31 @@ MainView::MainView (PluginProcessor& p, PluginEditor& e)
         });
     };
     saveBtn.onClick = [this] { savePresetDialog(); };
-    gearBtn.onClick = [this] { editor.openAdvanced ("Mix / Timing"); };
+    gearBtn.onClick = [this] { editor.toggleSettings(); };
     for (auto* b : { &loadBtn, &saveBtn, &gearBtn }) b->getProperties().set ("stroke", 1.7f);
     for (auto* b : { &prevPreset, &nextPreset }) { b->getProperties().set ("iconSize", 22.0f); b->getProperties().set ("stroke", 2.0f); }
     heart.getProperties().set ("stroke", 1.8f); heart.getProperties().set ("iconSize", 21.0f);
-    loadBtn.getProperties().set ("iconSize", 20.0f); saveBtn.getProperties().set ("iconSize", 19.0f); gearBtn.getProperties().set ("iconSize", 20.0f);
+    loadBtn.getProperties().set ("iconSize", 20.0f); saveBtn.getProperties().set ("iconSize", 21.5f); gearBtn.getProperties().set ("iconSize", 20.0f);
     abSeg.onSelect = [this] (int s) { proc.presets().switchAB (s); refreshPresetName(); };
-    abSeg.setTooltip ("A/B comparison of complete states (Settings > Mix / Timing for copy, loudness match, clear tail)");
+    abSeg.setTooltip ("A/B comparison of complete states (copy, loudness match, clear tail: Settings > Audio)");
     abSeg.setTitle ("A/B slot");
     abSeg.setSelected (proc.presets().abSlot(), false);
     abSeg.setFontHeight (10.0f);
     mixKnob.slider.setTooltip ("DRY / WET: overall blend. 50% keeps dry and wet at their full levels; 0% = dry only, 100% = wet only. "
-                               "Output (wet) and dry trims are in Settings > Mix / Timing.");
+                               "Output (wet) and dry trims are in Settings > Audio.");
 
-    dMenu.onClick = [this] { editor.openAdvanced ("Delay"); };
-    rMenu.onClick = [this] { editor.openAdvanced ("Reverb"); };
-    hMenu.onClick = [this] { editor.openAdvanced ("Harmony"); };
-    for (auto* m : { &dMenu, &rMenu, &hMenu }) m->getProperties().set ("stroke", 1.6f);
+    dMenu.onClick = [this] { showDetail (detailOpen == 0 ? -1 : 0); };
+    rMenu.onClick = [this] { showDetail (detailOpen == 1 ? -1 : 1); };
+    hMenu.onClick = [this] { showDetail (detailOpen == 2 ? -1 : 2); };
+    for (auto* m : { &dMenu, &rMenu, &hMenu }) { m->getProperties().set ("stroke", 1.5f); m->getProperties().set ("iconSize", 18.0f); }
+    for (int i = 0; i < 3; ++i)
+    {
+        details[i] = std::make_unique<EffectDetail> (p, (EffectDetail::Effect) i);
+        details[i]->onBack = [this] { showDetail (-1); };
+        addChildComponent (*details[i]);
+    }
     for (auto* c : { &dMode, &rMode }) c->getProperties().set ("textInset", 17);
     source.getProperties().set ("textInset", 14);
-    advancedBtn.onClick = [this] { editor.openAdvanced (proc.uiAdvancedTab); };
-    advancedBtn.setTooltip ("All settings with help text: Classic details, MIDI, arp, timing, A/B, diagnostics");
     panic.onClick = [this] { proc.panic(); };
     tailKill.onClick = [this] { proc.tailKill(); };
     panic.setTitle ("Panic: all notes off"); tailKill.setTitle ("Tail kill: clear wet tails");
@@ -316,11 +227,11 @@ MainView::MainView (PluginProcessor& p, PluginEditor& e)
     latch.setTooltip ("LATCH holds the played harmony after key-up (harmony state). Separate from FREEZE and from the Hold Last policy.");
     freeze.setTooltip ("FREEZE holds the audio ambience (never creates sound by itself). Chords can still change over it in After Space.");
     wetOnly.setTooltip ("WET ONLY removes the dry signal completely (return tracks). It overrides DRY / WET and keeps its value.");
-    for (juce::Button* b : std::initializer_list<juce::Button*> { &latch, &freeze, &wetOnly, &advancedBtn, &bbdSync, &ivSync })
+    for (juce::Button* b : std::initializer_list<juce::Button*> { &latch, &freeze, &wetOnly, &bbdSync, &ivSync })
         b->getProperties().set ("radius", 6.0f);
     bbdSync.getProperties().set ("capPx", 9.5f); ivSync.getProperties().set ("capPx", 9.5f);
-    // compact action group: 11.75 px medium labels, identical radius / padding for all four
-    for (juce::Button* b : std::initializer_list<juce::Button*> { &latch, &freeze, &wetOnly, &advancedBtn })
+    // compact action group: 11.75 px medium labels, identical radius / padding for all three
+    for (juce::Button* b : std::initializer_list<juce::Button*> { &latch, &freeze, &wetOnly })
     {
         b->getProperties().set ("capPx", 11.75 * theme::kCapPerEm);
         b->getProperties().set ("radius", 5.0f);
@@ -335,10 +246,7 @@ MainView::MainView (PluginProcessor& p, PluginEditor& e)
     for (auto* b : { &polHold, &polRelease, &polAmbient }) { b->getProperties().set ("iconBox", true); b->getProperties().set ("iconW", 24.0f); b->getProperties().set ("iconH", 24.0f); b->getProperties().set ("stroke", 1.8f); }
     placement.setFontHeight (9.0f);
     placement.getProperties().set ("firstFraction", 183.0 / 379.0); // AFTER SPACE | BEFORE SPACE split at x 1177
-    chordBadge.onClick = [this] {
-        auto content = std::make_unique<SourceSettings> (proc);
-        juce::CallOutBox::launchAsynchronously (std::move (content), chordBadge.getScreenBounds(), nullptr);
-    };
+    chordBadge.onClick = [this] { showDetail (detailOpen == 2 ? -1 : 2, 0); }; // Harmony settings, source page (chord / intervals / arp / MIDI)
     hint.setColour (juce::Label::textColourId, theme::displayLabel.withAlpha (0.8f));
     hint.setFont (theme::capFont (8.0f, 1, 0.04f));
     hint.setJustificationType (juce::Justification::centredRight);
@@ -426,11 +334,43 @@ void MainView::bindModeKnobs()
         dk[3]->bind (BbdAge, "Age");
         dk[4]->bind (BbdLevel, "Level");
     }
-    bbdSync.setVisible (! interval);
-    ivSync.setVisible (interval);
+    bbdSync.setVisible (! interval && detailOpen != 0); // the delay settings heading carries its own SYNC
+    ivSync.setVisible (interval && detailOpen != 0);
     const bool wash = proc.value (ReverbMode) > 0.5f;
     if (wash) { rk[0]->bind (WaDecay, "Decay"); rk[1]->bind (WaBloom, "Bloom"); rk[2]->bind (WaTone, "Tone"); rk[3]->bind (WaMotion, "Motion"); rk[4]->bind (WaLevel, "Level"); }
     else { rk[0]->bind (PlDecay, "Decay"); rk[1]->bind (PlPredelay, "Pre-delay"); rk[2]->bind (PlTone, "Tone"); rk[3]->bind (PlMotion, "Motion"); rk[4]->bind (PlLevel, "Level"); }
+}
+
+void MainView::showDetail (int which, int page)
+{
+    which = juce::jlimit (-1, 2, which);
+    GraphWell* graphs[3] = { &dGraph, &rGraph, &hGraph };
+    IconButton* toggles[3] = { &dMenu, &rMenu, &hMenu };
+    const bool hadFocus = detailOpen >= 0 && details[detailOpen]->hasKeyboardFocus (true);
+    detailOpen = which;
+    for (int i = 0; i < 3; ++i)
+    {
+        const bool open = i == which;
+        if (open)
+        {
+            if (page >= 0) details[i]->showPage (page);
+            details[i]->update();
+        }
+        else if (! graphs[i]->isVisible())
+        {
+            // returning to the graph: rebuild from the live history before it shows (nothing was drawn while hidden)
+            if (! fixtureMode) { if (i == 0) dGraph.update(); else if (i == 1) rGraph.update(); else hGraph.update(); }
+            graphs[i]->markDirty();
+        }
+        details[i]->setVisible (open);
+        graphs[i]->setVisible (! open);
+        toggles[i]->setToggleState (open, juce::dontSendNotification);
+        toggles[i]->setTooltip (juce::StringArray { "Delay settings", "Reverb settings", "Harmony settings" }[i] + (open ? " (click again or Esc: back to the graph)" : juce::String()));
+    }
+    hint.setVisible (which != 2);
+    bindModeKnobs();
+    if (which >= 0) { if (details[which]->isShowing()) details[which]->grabKeyboardFocus(); }
+    else if (hadFocus && isShowing()) grabKeyboardFocus();
 }
 
 void MainView::resized()
@@ -480,19 +420,22 @@ void MainView::resized()
     hMenu.setBounds (juce::Rectangle<int> (28, 32).withCentre ({ 1486, hhy }));
     hGraph.setBounds (42, 686, 912, 160);
     hint.setBounds (520, 690, 426, 18);
+    details[0]->setBounds (dGraph.getBounds());
+    details[1]->setBounds (rGraph.getBounds());
+    details[2]->setBounds (hGraph.getBounds());
     for (int i = 0; i < 4; ++i) hk[i]->setBounds (hX[i] - ParamKnob::kEngineCx, 768 - ParamKnob::kEngineCy, ParamKnob::kEngineW, ParamKnob::kEngineH);
     // ---- performance row
     pitchWheel.setBounds (62 - 23, 877, 46, 100);
     modWheel.setBounds (111 - 23, 877, 46, 100);
     keyboard.setBounds (150, 872, 968, 111);
-    // compact 2 x 2 action group (110 x 33, 8 px gaps), centred between the divider (x 1134) and the utility column
+    // compact action group (Latch | Freeze over a full-width Wet Only; 110 x 33 cells, 8 px gaps), centred between the
+    // divider (x 1134) and the utility column
     {
         constexpr int bw = 110, bh = 33, gap = theme::kGap;
         const int gx = (1134 + 1460) / 2 - (2 * bw + gap) / 2, gy = 866 + (121 - (2 * bh + gap)) / 2;
         latch.setBounds (gx, gy, bw, bh);
         freeze.setBounds (gx + bw + gap, gy, bw, bh);
-        wetOnly.setBounds (gx, gy + bh + gap, bw, bh);
-        advancedBtn.setBounds (gx + bw + gap, gy + bh + gap, bw, bh);
+        wetOnly.setBounds (gx, gy + bh + gap, 2 * bw + gap, bh);
         // utility icons share the button rows' centre lines
         panic.setBounds (juce::Rectangle<int> (32, 32).withCentre ({ 1477, gy + bh / 2 }));
         tailKill.setBounds (juce::Rectangle<int> (32, 32).withCentre ({ 1477, gy + bh + gap + bh / 2 }));
@@ -591,14 +534,14 @@ void MainView::paintStatic (juce::Graphics& g)
     capText (g, "SOURCE", theme::capFont (9.3f, 1, 0.0f), 1016.0f, theme::kHarmonyHeaderY - 4.65f, 9.3f);
 }
 
-juce::String MainView::midiStatusText() const
+juce::String midiStatusFor (PluginProcessor& proc)
 {
     auto& t = proc.telemetry();
     const int notesIn = t.hostNoteOnCounter.load(), msgs = t.hostMidiCounter.load(), dropped = t.hostFilteredCounter.load();
     if (proc.isCompanion()) return "Audio AU: this plug-in type receives no MIDI. Use Chord, Intervals, Arp or the on-screen keys.";
     if (notesIn > 0)
         return "MIDI in: ch " + juce::String (t.lastHostChannel.load()) + ", last " + juce::String (paramValueToText (ShRef, (float) t.lastHostNote.load())) + " (" + juce::String (notesIn) + " notes)";
-    if (dropped > 0) return "MIDI on ch " + juce::String (t.lastHostChannel.load()) + " is dropped by the channel filter (Advanced > MIDI)";
+    if (dropped > 0) return "MIDI on ch " + juce::String (t.lastHostChannel.load()) + " is dropped by the channel filter (Settings > MIDI / Setup)";
     if (msgs > 0) return "MIDI in: " + juce::String (msgs) + " messages, no notes yet";
     if (proc.isStandalone()) return "No MIDI yet: enable your controller in Audio / MIDI (on-screen keys always work)";
     if (proc.wrapperType == juce::AudioProcessor::wrapperType_AudioUnit) return "No MIDI yet. Logic: Side Chain setup. Ableton Live: use the VST3";
@@ -615,10 +558,12 @@ void MainView::update()
     if (modeKey != lastModeKey) { lastModeKey = modeKey; bindModeKnobs(); }
     if (! fixtureMode)
     {
-        dGraph.update();
-        rGraph.update();
-        hGraph.update();
+        // a graph hidden behind its settings is not drawn; it rebuilds from the live history rings when it returns
+        if (detailOpen != 0) dGraph.update();
+        if (detailOpen != 1) rGraph.update();
+        if (detailOpen != 2) hGraph.update();
     }
+    if (detailOpen >= 0) details[detailOpen]->update();
     keyboard.update();
     for (auto& k : dk) k->refreshValue();
     for (auto& k : rk) k->refreshValue();
@@ -637,7 +582,7 @@ void MainView::update()
     const bool wo = proc.value (WetOnly) > 0.5f;
     mixKnob.setAlpha (wo ? 0.55f : 1.0f);
     mixKnob.slider.setTooltip (wo ? "WET ONLY is on: it overrides DRY / WET (dry removed, wet at full level). The stored blend returns when Wet Only is off."
-                                  : "DRY / WET: overall blend. 50% keeps dry and wet at their full levels; 0% = dry only, 100% = wet only. Output (wet) and dry trims: Settings > Mix / Timing.");
+                                  : "DRY / WET: overall blend. 50% keeps dry and wet at their full levels; 0% = dry only, 100% = wet only. Output (wet) and dry trims: Settings > Audio.");
     // chord badge: the voiced chord (or the stored chord for the Chord source)
     {
         std::vector<int> voiced;
@@ -652,7 +597,7 @@ void MainView::update()
         if (txt != chordBadge.text) { chordBadge.text = txt; chordBadge.repaint(); }
     }
     // source tooltip carries the live MIDI status (no permanent diagnostics in the layout)
-    source.setTooltip (juce::String (paramInfo (NoteSource).help) + "\n" + midiStatusText());
+    source.setTooltip (juce::String (paramInfo (NoteSource).help) + "\n" + midiStatusFor (proc));
     // transient hints inside the harmony well (only when something needs attention)
     juce::String h;
     if (proc.latencyChangePending()) h = "STOP TRANSPORT TO APPLY TIMING / QUALITY";
@@ -691,6 +636,9 @@ PluginEditor::PluginEditor (PluginProcessor& p) : juce::AudioProcessorEditor (p)
     }
     view->setBounds (0, top, theme::kCanvasW, theme::kCanvasH);
     canvas.setSize (theme::kCanvasW, theme::kCanvasH + top);
+    catcher.setName ("settings-outside-click");
+    catcher.onClick = [this] { showSettings (-1); };
+    canvas.addChildComponent (catcher);
     proc.presets().onChange = [this] { juce::Component::SafePointer<PluginEditor> sp (this); juce::MessageManager::callAsync ([sp] { if (sp) sp->view->refreshPresetName(); }); };
     setResizable (true, true);
     const double aspect = (double) canvas.getWidth() / (double) canvas.getHeight();
@@ -705,7 +653,7 @@ PluginEditor::~PluginEditor()
 {
     stopTimer();
     proc.presets().onChange = nullptr;
-    advanced.reset();
+    settings.reset();
     juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
     setLookAndFeel (nullptr);
 }
@@ -727,7 +675,6 @@ void PluginEditor::resized()
     const float ox = ((float) getWidth() - (float) canvas.getWidth() * s) * 0.5f, oy = ((float) getHeight() - (float) canvas.getHeight() * s) * 0.5f;
     canvas.setTopLeftPosition (0, 0);
     canvas.setTransform (juce::AffineTransform::scale (s).translated (ox, oy));
-    if (advanced) advanced->setBounds (getLocalBounds());
 }
 
 void PluginEditor::timerCallback()
@@ -756,46 +703,71 @@ void PluginEditor::setReferenceFixture (bool on)
 
 juce::Component* PluginEditor::mainView() const { return view.get(); }
 
-std::unique_ptr<juce::Component> PluginEditor::createSourceSettingsForSnapshot()
-{
-    auto c = std::make_unique<SourceSettings> (proc);
-    c->setLookAndFeel (&lnf);
-    return c;
-}
-
 juce::Image PluginEditor::snapshotCanvas (float scale)
 {
     return view->createComponentSnapshot (view->getLocalBounds(), true, scale);
 }
 
-void PluginEditor::showAdvancedForSnapshot (const juce::String& tab)
+void PluginEditor::showEffectSettings (int effect, int page)
 {
-    if (tab.isEmpty()) closeAdvanced(); else openAdvanced (tab);
+    view->showDetail (effect, page);
 }
 
-void PluginEditor::openAdvanced (const juce::String& tab)
+void PluginEditor::showSettings (int page)
 {
-    if (! advanced)
+    if (page < 0)
     {
-        focusBeforeAdvanced = juce::Component::getCurrentlyFocusedComponent();
-        advanced = std::make_unique<AdvancedPanel> (proc, [this] { juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<PluginEditor> (this)] { if (sp) sp->closeAdvanced(); }); });
-        advanced->onSaveExperiment = [this] { saveExperiment(); };
-        addAndMakeVisible (*advanced);
-        advanced->setBounds (getLocalBounds());
+        if (! settings) return;
+        settings.reset();
+        catcher.setVisible (false);
+        view->setSettingsButtonOn (false);
+        if (focusBeforeSettings != nullptr && focusBeforeSettings->isShowing()) focusBeforeSettings->grabKeyboardFocus();
+        return;
     }
-    advanced->showTab (tab);
-    advanced->grabKeyboardFocus();
+    if (! settings)
+    {
+        focusBeforeSettings = juce::Component::getCurrentlyFocusedComponent();
+        auto close = [this] { juce::MessageManager::callAsync ([sp = juce::Component::SafePointer<PluginEditor> (this)] { if (sp) sp->showSettings (-1); }); };
+        settings = std::make_unique<SettingsPanel> (proc, close, [this] { saveExperiment(); });
+        catcher.setBounds (canvas.getLocalBounds());
+        catcher.setVisible (true);
+        catcher.toFront (false);
+        canvas.addAndMakeVisible (*settings);
+        // anchored under the gear (canvas x 1167), clamped inside the canonical canvas
+        const int top = view->getY();
+        const int x = juce::jlimit (22, theme::kCanvasW - 22 - SettingsPanel::kW, 1167 - SettingsPanel::kW / 2);
+        settings->setBounds (x, top + (int) theme::kHeaderMidY + 22, SettingsPanel::kW, SettingsPanel::kH);
+        view->setSettingsButtonOn (true);
+    }
+    settings->showPage (page);
+    if (settings->isShowing()) settings->grabKeyboardFocus();
 }
 
-void PluginEditor::closeAdvanced()
+int PluginEditor::openEffectSettings() const { return view->openDetail(); }
+juce::String PluginEditor::effectSettingsTitle (int effect) const { return view->detailTitle (effect); }
+
+void PluginEditor::toggleSettings()
 {
-    advanced.reset();
-    if (focusBeforeAdvanced != nullptr && focusBeforeAdvanced->isShowing()) focusBeforeAdvanced->grabKeyboardFocus();
+    if (settings) { showSettings (-1); return; }
+    const auto last = proc.uiAdvancedTab;
+    showSettings (last == "Audio" ? 1 : (last == "Support" ? 2 : 0));
+}
+
+void PluginEditor::showDestination (const juce::String& name)
+{
+    if (name.isEmpty()) { showSettings (-1); view->showDetail (-1); return; }
+    const juce::StringArray effects { "Delay", "Reverb", "Harmony" };
+    if (effects.contains (name)) { showSettings (-1); view->showDetail (effects.indexOf (name)); return; }
+    const int page = (name == "Audio" || name == "Mix / Timing") ? 1 : ((name == "Support" || name == "Diagnostics") ? 2 : 0);
+    showSettings (page);
 }
 
 bool PluginEditor::keyPressed (const juce::KeyPress& k)
 {
-    if (k.isKeyCode (juce::KeyPress::escapeKey) && advanced) { closeAdvanced(); return true; }
+    if (! k.isKeyCode (juce::KeyPress::escapeKey)) return false;
+    // a text field or open menu consumes Escape first (it never reaches here while a child editor is active)
+    if (settings) { showSettings (-1); return true; }
+    if (view->openDetail() >= 0) { view->showDetail (-1); return true; }
     return false;
 }
 

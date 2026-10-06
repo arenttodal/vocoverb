@@ -17,7 +17,7 @@ set(PA_PLUGIN_SOURCES
     Source/UI/Widgets.cpp
     Source/UI/Visuals.cpp
     Source/UI/Keyboard.cpp
-    Source/UI/AdvancedPanel.cpp
+    Source/UI/SettingsViews.cpp
     Source/UI/StandalonePanel.cpp
     Source/UI/PluginEditor.cpp)
 

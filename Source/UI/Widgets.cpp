@@ -280,6 +280,11 @@ void IconButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
     const float s = std::min ((float) getProperties().getWithDefault ("iconSize", 1000.0f), std::min (r.getWidth(), r.getHeight()));
     auto b = r.withSizeKeepingCentre (s, s);
     const juce::Colour c = ! isEnabled() ? theme::textDisabled : (getToggleState() ? theme::accent : theme::text);
+    if (getToggleState()) // selected (its view is open): faint accent wash behind the accent icon
+    {
+        g.setColour (theme::accent.withAlpha (0.10f));
+        g.fillRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 5.0f);
+    }
     if (highlighted || down)
     {
         g.setColour (juce::Colours::black.withAlpha (down ? 0.08f : 0.04f));
