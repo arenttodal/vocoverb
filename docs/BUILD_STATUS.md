@@ -21,6 +21,10 @@
 - Linux CI: build, tests, self-test, pluginval v1.0.4 strictness 8 on the VST3, ASan core tests: PASS.
   Locally also pluginval strictness 10 (Linux VST3): SUCCESS.
 
+- CI run 4 (commit dd482f7, run https://github.com/arenttodal/vocoverb/actions/runs/37436534447): host-side MIDI
+  delivery check (pa_hostcheck) PASS on macOS for the VST3 and the MIDI AU (MIDI changes 63 % of the output) and
+  confirms the Audio AU has no MIDI input; Linux VST3 PASS. All other checks green as in run 2.
+
 ## Next actions
 - Host tests in Ableton Live and Logic Pro, hardware live input and listening feedback (see Feedback-Template).
 
