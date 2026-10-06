@@ -24,7 +24,7 @@ cmake -S "${PA_ROOT}" -B "${BUILD_DIR}" -G "${GEN}" -DCMAKE_BUILD_TYPE=Release \
   -DPA_JUCE_DIR="${PA_ROOT}/.deps/JUCE" 2>&1 | tee "${PA_LOG_DIR}/configure-${ARCH}.log"
 log "Building"
 cmake --build "${BUILD_DIR}" --config Release --parallel "$(sysctl -n hw.ncpu)" \
-  --target PlayableAmbience_All PlayableAmbienceAudio_All pa_tests pa_render pa_bench 2>&1 | tee "${PA_LOG_DIR}/build-${ARCH}.log"
+  --target PlayableAmbience_All PlayableAmbienceAudio_All pa_tests pa_render pa_bench pa_hostcheck 2>&1 | tee "${PA_LOG_DIR}/build-${ARCH}.log"
 ART="${BUILD_DIR}/PlayableAmbience_artefacts/Release"
 for p in "${ART}/Standalone/Playable Ambience.app" "${ART}/VST3/Playable Ambience.vst3" "${ART}/AU/Playable Ambience.component" \
          "${BUILD_DIR}/PlayableAmbienceAudio_artefacts/Release/AU/Playable Ambience Audio.component"; do

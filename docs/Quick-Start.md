@@ -42,13 +42,27 @@ Press **FREEZE** while the tail rings, stop the source, then change chords: the 
 Click **Live Input** (use headphones). macOS asks for microphone access the first time — only then. Choose the input
 device and channels in **Audio / MIDI**, and enable your MIDI controller there.
 
-## 7. Ableton Live (VST3)
-1. Rescan plug-ins (Preferences > Plug-Ins). Insert **Playable Ambience** on an audio track or a Return track.
-2. Create a MIDI track, set **MIDI To** = the track hosting Playable Ambience / "Playable Ambience", monitor **In**
-   (or arm it). Choose **MIDI** as note source.
-3. On a Return track (or whenever the source track stays audible) enable **WET ONLY**.
-4. Plugin default timing is **Studio** (dry and wet aligned, latency reported). Timing/quality changes wait for the
-   transport to stop.
+## 7. Ableton Live — use the VST3
+In Live use **Playable Ambience** from **Plug-ins > VST3 > ARN**. Do not use the Audio Units versions in Live:
+Live does not deliver MIDI to AU effects, and **Playable Ambience Audio** has no MIDI input at all (it is for Logic
+without MIDI). If you only see Audio Units entries, turn on **Settings > Plug-Ins > Use VST3 Plug-in System Folders**
+and click **Rescan**.
+
+1. **Audio track** (your voice, instrument or recorded clip): drag **Playable Ambience** (VST3) onto it, *after*
+   any instrument if it is a MIDI-instrument track. (On a **Return** track it also works; then enable **WET ONLY**.)
+2. **MIDI track** (new, empty, no instrument): this is where you play or draw the chords.
+   - **MIDI From**: your keyboard (or *All Ins*).
+   - **MIDI To**: top menu = the audio/return track from step 1; **bottom menu = "Playable Ambience"**.
+     If the bottom menu shows only *Track In* or nothing, Live did not load the VST3 — re-insert it from the VST3 folder.
+   - **Monitor = In** (or arm the track). Live only forwards live keyboard notes from a monitored/armed track;
+     notes in MIDI clips on this track are sent while the clip plays.
+3. In the plug-in's **HARMONY** card choose **MIDI** as note source. The line next to the MIDI dot shows
+   *"MIDI IN ch 1 last C3 (n notes)"* as soon as notes arrive. If it says *"No MIDI yet"*, the routing in step 2 is
+   not reaching the plug-in; if the status strip says *"MIDI notes arriving but ignored: Note Source is CHORD"*,
+   switch the note source to MIDI (the four *Matched* comparison presets use a stored chord on purpose).
+
+The plug-in's default timing is **Studio** (dry and wet aligned, latency reported to Live). Timing/quality changes
+wait for the transport to stop. Without any MIDI, a fresh preset plays its stored chord (C minor) until the first note.
 
 ## 8. Logic Pro (AU)
 - **MIDI control:** create a Software Instrument track, in the Instrument slot choose **AU MIDI-controlled Effects >
@@ -60,8 +74,10 @@ device and channels in **Audio / MIDI**, and enable your MIDI controller there.
 ## 9. Troubleshooting
 - **Silent harmony?** The carrier never sounds without audio: you need input audio or a ringing/frozen tail.
   Check the IN meter, the source strip, and the chord readout (NO NOTES = check the no-note policy or press keys).
-- **MIDI not arriving?** Watch the MIDI dot in the Harmony card (MIDI source). In Live, check MIDI To and monitoring;
-  in Logic use the MIDI-controlled AU. Advanced > MIDI shows the channel filter.
+- **MIDI not arriving?** The text next to the MIDI dot in the Harmony card tells you what the plug-in receives
+  (*No MIDI yet* / *MIDI IN ch.. last ..* / *dropped by the channel filter*). In Live use the **VST3** and pick
+  *Playable Ambience* in the MIDI track's lower **MIDI To** menu with Monitor = In (section 7); in Logic use the
+  MIDI-controlled AU with Side Chain (section 8). Advanced > MIDI has the channel filter (Omni by default).
 - **Stuck notes:** the **!** button (Panic) releases all notes; the wave-cross button (Tail Kill) also clears tails.
 - **Plugin missing:** run the installer, then rescan (Live) or restart Logic; check Logic's Plug-in Manager.
 - **CPU / clicks:** Advanced > Mix / Timing > Quality (Eco), larger buffer in Audio / MIDI; Advanced > Diagnostics

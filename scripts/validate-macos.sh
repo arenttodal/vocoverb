@@ -54,6 +54,16 @@ else
   status_line "pluginval" "NOT PERFORMED" "pluginval could not be downloaded"
 fi
 
+# Host-side MIDI delivery: load each plug-in like a DAW, send a MIDI chord, verify the harmony output changes.
+HC="${BUILD_DIR}/pa_hostcheck_artefacts/Release/pa_hostcheck"
+if [[ -x "${HC}" ]]; then
+  run_check "host MIDI delivery: VST3 receives MIDI" "${REPORT_DIR}/hostmidi-vst3.txt" "${HC}" "${VST3_DIR}/Playable Ambience.vst3" --expect-midi
+  run_check "host MIDI delivery: MIDI AU (aumf) receives MIDI" "${REPORT_DIR}/hostmidi-aumf.txt" "${HC}" "${COMP_DIR}/Playable Ambience.component" --expect-midi
+  run_check "host MIDI delivery: Audio AU (aufx) has no MIDI input (by design)" "${REPORT_DIR}/hostmidi-aufx.txt" "${HC}" "${COMP_DIR}/Playable Ambience Audio.component" --expect-no-midi
+else
+  status_line "host MIDI delivery" "NOT PERFORMED" "pa_hostcheck not built"
+fi
+
 for b in "${APP}" "${VST3}" "${AUM}" "${AUA}"; do
   exe="$(find "${b}/Contents/MacOS" -type f -perm -u+x | head -1)"
   archs="$(lipo -archs "${exe}" 2>/dev/null || echo unknown)"

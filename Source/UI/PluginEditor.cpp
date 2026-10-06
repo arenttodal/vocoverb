@@ -105,6 +105,8 @@ private:
     juce::Rectangle<int> header, dCard, rCard, routeStrip, hCard, perfRow, dKnobArea, rKnobArea;
     bool dCollapsed = false, rCollapsed = false, stacked = false;
     int lastMidiCount = 0; float midiLed = 0.0f;
+    int lastHostNoteCount = 0; juce::uint32 lastHostNoteTicks = 0;
+    juce::String midiStatusText() const;
     juce::String statusText, dryWetText;
     int lastLayoutKey = -1;
 };
@@ -499,7 +501,7 @@ void MainView::layoutSourceBar (juce::Rectangle<int> r)
     auto place = [&r] (juce::Component& c, int w) { c.setVisible (true); c.setBounds (r.removeFromLeft (std::min (w, std::max (0, r.getWidth()))).reduced (0, 2)); r.removeFromLeft (6); };
     switch (src)
     {
-        case 0: place (policy, 300); midiLedArea = r.removeFromLeft (200); break;
+        case 0: place (policy, 300); midiLedArea = r; break;
         case 1:
             place (chRoot, 64); place (chQuality, 92); place (chOct, 86); place (chInv, 80); place (chSpread, 80);
             r.removeFromLeft (4);
@@ -609,6 +611,23 @@ void MainView::paint (juce::Graphics& g)
     paintCard (g, perfRow.toFloat());
 }
 
+juce::String MainView::midiStatusText() const
+{
+    auto& t = proc.telemetry();
+    const int notesIn = t.hostNoteOnCounter.load(), msgs = t.hostMidiCounter.load(), dropped = t.hostFilteredCounter.load();
+    const juce::String fmt = juce::AudioProcessor::getWrapperTypeDescription (proc.wrapperType);
+    if (notesIn > 0)
+        return "MIDI IN ch " + juce::String (t.lastHostChannel.load()) + "  last " + juce::String (paramValueToText (ShRef, (float) t.lastHostNote.load()))
+               + "  (" + juce::String (notesIn) + " notes)";
+    if (dropped > 0)
+        return "MIDI on ch " + juce::String (t.lastHostChannel.load()) + " dropped by the channel filter (Advanced > MIDI)";
+    if (msgs > 0) return "MIDI IN (" + juce::String (msgs) + " msgs, no notes yet)";
+    if (proc.isStandalone()) return "No MIDI yet: enable your controller in Audio / MIDI (on-screen keys always work)";
+    if (proc.wrapperType == juce::AudioProcessor::wrapperType_AudioUnit)
+        return "No MIDI yet (AU). Logic: Side Chain setup. Ableton Live: use the VST3";
+    return "No MIDI yet (" + fmt + "). Live: MIDI track > MIDI To > this track > Playable Ambience";
+}
+
 void MainView::update()
 {
     auto& t = proc.telemetry();
@@ -644,13 +663,23 @@ void MainView::update()
     if (t.clearing.load() == 2) s << "  |  clearing tail";
     if (t.nonfiniteCount.load() > 0) s << "  |  wet reset x" << t.nonfiniteCount.load();
     if (proc.isCompanion()) s << "  |  Audio AU: no MIDI input";
+    else
+    {
+        // MIDI that arrives while the note source ignores it is the most common "MIDI does nothing" cause
+        const int hn = t.hostNoteOnCounter.load();
+        if (hn != lastHostNoteCount) { lastHostNoteCount = hn; lastHostNoteTicks = juce::Time::getMillisecondCounter(); }
+        const bool recent = hn > 0 && juce::Time::getMillisecondCounter() - lastHostNoteTicks < 4000;
+        const int srcNow = (int) proc.value (NoteSource);
+        const bool ignored = srcNow == 1 || (srcNow == 2 && (int) proc.value (IntRefSource) == 0);
+        if (recent && ignored) s << "  |  MIDI notes arriving but ignored: Note Source is " << (srcNow == 1 ? "CHORD" : "INTERVALS (stored root)") << " - choose MIDI";
+    }
     if (s != statusText) { statusText = s; repaint (routeStrip); }
     const juce::String dw = proc.value (WetOnly) > 0.5f ? "WET ONLY" : "DRY + WET   DRY " + juce::String (paramValueToText (DryLevel, proc.value (DryLevel)));
     if (dw != dryWetText) { dryWetText = dw; repaint (header); }
     // source info
     juce::String si;
     const int src = (int) proc.value (NoteSource);
-    if (src == 0) si = "MIDI in (" + juce::String (mc) + ")" + (t.holdingLast.load() ? "   holding last chord" : "");
+    if (src == 0) si = midiStatusText() + (t.holdingLast.load() ? "   |  holding last chord" : "");
     else if (src == 2)
     {
         si = "offsets";

@@ -116,8 +116,15 @@ void Engine::handleEvent (const MidiEvent& e) noexcept
     telemetry.midiCounter.fetch_add (1, std::memory_order_relaxed);
     if (e.origin == Origin::Host)
     {
+        telemetry.hostMidiCounter.fetch_add (1, std::memory_order_relaxed);
+        telemetry.lastHostChannel.store (ch + 1, std::memory_order_relaxed);
         const int filter = p.i (MidiChannel);
-        if (filter != 0 && ch + 1 != filter) return;
+        if (filter != 0 && ch + 1 != filter) { telemetry.hostFilteredCounter.fetch_add (1, std::memory_order_relaxed); return; }
+        if (type == 0x90 && e.d2 > 0)
+        {
+            telemetry.hostNoteOnCounter.fetch_add (1, std::memory_order_relaxed);
+            telemetry.lastHostNote.store (e.d1, std::memory_order_relaxed);
+        }
     }
     switch (type)
     {

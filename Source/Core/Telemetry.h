@@ -23,6 +23,11 @@ struct Telemetry
     std::array<std::atomic<bool>, 6> voiceGate {};
     std::atomic<int> midiCounter { 0 };
     std::atomic<int> noteEventCounter { 0 };
+    std::atomic<int> hostMidiCounter { 0 };      // every short message the host delivered (before channel filtering)
+    std::atomic<int> hostNoteOnCounter { 0 };    // host note-ons that passed the channel filter
+    std::atomic<int> hostFilteredCounter { 0 };  // host messages dropped by the MIDI channel filter
+    std::atomic<int> lastHostNote { -1 };
+    std::atomic<int> lastHostChannel { -1 };     // 1..16
     std::atomic<bool> protectionActive { false };
     std::atomic<int> protectionCount { 0 };
     std::atomic<int> nonfiniteCount { 0 };

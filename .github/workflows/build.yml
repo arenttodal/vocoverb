@@ -38,7 +38,7 @@ jobs:
         if: always()
         run: |
           for f in out/reports/validation-macos.md out/reports/Validation-Report.md; do echo "===== $f"; cat "$f" 2>/dev/null || true; done
-          for f in out/reports/auval-aumf.txt out/reports/auval-aufx.txt out/reports/pluginval-vst3.txt out/reports/pluginval-au.txt out/reports/pluginval-au-audio.txt; do
+          for f in out/reports/auval-aumf.txt out/reports/auval-aufx.txt out/reports/pluginval-vst3.txt out/reports/pluginval-au.txt out/reports/pluginval-au-audio.txt out/reports/hostmidi-vst3.txt out/reports/hostmidi-aumf.txt out/reports/hostmidi-aufx.txt; do
             echo "===== $f (tail)"; tail -25 "$f" 2>/dev/null || true; done
           echo "===== benchmark"; cat out/reports/benchmark.txt 2>/dev/null || true
       - name: Installer / uninstaller test (throwaway HOME)
@@ -101,6 +101,10 @@ jobs:
           curl -sSL -o pv.zip https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Linux.zip && unzip -o -q pv.zip
           xvfb-run -a ./pluginval --strictness-level 8 --validate-in-process --timeout-ms 900000 \
             "build/PlayableAmbience_artefacts/Release/VST3/Playable Ambience.vst3" | tee out/reports/pluginval-linux-vst3.txt
+      - name: Host MIDI delivery (VST3)
+        run: |
+          xvfb-run -a ./build/pa_hostcheck_artefacts/Release/pa_hostcheck \
+            "build/PlayableAmbience_artefacts/Release/VST3/Playable Ambience.vst3" --expect-midi | tee out/reports/hostmidi-linux-vst3.txt
       - name: Sanitizer core tests
         run: |
           cmake -S . -B build-asan -G Ninja -DPA_BUILD_PLUGIN=OFF -DPA_SANITIZE=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo

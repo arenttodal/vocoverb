@@ -96,3 +96,12 @@ if(APPLE)
     pa_configure_target(PlayableAmbienceAudio)
     target_compile_definitions(PlayableAmbienceAudio PUBLIC PA_COMPANION=1)
 endif()
+
+# Host-side MIDI delivery check (loads the built VST3/AU like a DAW and verifies MIDI changes the output).
+juce_add_console_app(pa_hostcheck PRODUCT_NAME "pa_hostcheck")
+target_sources(pa_hostcheck PRIVATE Tools/HostMidiCheck.cpp)
+target_compile_definitions(pa_hostcheck PRIVATE JUCE_PLUGINHOST_VST3=1 JUCE_PLUGINHOST_AU=1 JUCE_PLUGINHOST_LADSPA=0 JUCE_PLUGINHOST_LV2=0
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
+target_link_libraries(pa_hostcheck PRIVATE juce::juce_audio_processors juce::juce_audio_utils
+    PUBLIC juce::juce_recommended_config_flags juce::juce_recommended_warning_flags)
+juce_generate_juce_header(pa_hostcheck)
