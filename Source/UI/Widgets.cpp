@@ -62,11 +62,11 @@ ParamKnob::ParamKnob (PluginProcessor& p, int paramIndex, const juce::String& ti
     // Shift-drag swaps to fine velocity mode
     slider.setVelocityModeParameters (0.35, 1, 0.0, true, juce::ModifierKeys::shiftModifier);
     slider.setWantsKeyboardFocus (true);
-    slider.getProperties().set ("faceRadius", style == Style::Header ? 29.5f : 34.0f);
+    slider.getProperties().set ("faceRadius", style == Style::Header ? 22.0f : 34.0f);
     addAndMakeVisible (slider);
     value.setJustificationType (juce::Justification::centred);
     value.setEditable (false, true, false);
-    value.setFont (style == Style::Header ? theme::capFont (8.6f, 1) : theme::capFont (11.2f, 0));
+    value.setFont (style == Style::Header ? theme::capFont (10.5f * theme::kCapPerEm, 0) : theme::capFont (11.2f, 0));
     value.setColour (juce::Label::textColourId, theme::text);
     value.setColour (juce::Label::textWhenEditingColourId, theme::text);
     value.setColour (juce::Label::backgroundWhenEditingColourId, theme::valueBox);
@@ -125,9 +125,9 @@ void ParamKnob::resized()
     }
     if (style == Style::Header)
     {
-        const int side = 90;
-        slider.setBounds (juce::Rectangle<int> (side, side).withCentre ({ kHeaderCx, kHeaderCy }));
-        value.setBounds (juce::Rectangle<int> (70, 14).withCentre ({ kHeaderCx, 86 }));
+        // drag region a little beyond the 54 px tick ring; captions: ring + 4 px, label, + 3 px, value
+        slider.setBounds (juce::Rectangle<int> (62, 58).withCentre ({ kHeaderCx, kHeaderCy }));
+        value.setBounds (juce::Rectangle<int> (80, 14).withCentre ({ kHeaderCx, kHeaderCy + 27 + 4 + 8 + 3 + 4 }));
         return;
     }
     // canonical engine geometry: label cap top at y 7, knob centre (70, 64), value field 93 x 30 at y 112
@@ -150,8 +150,10 @@ void ParamKnob::paint (juce::Graphics& g)
     if (style == Style::Header)
     {
         g.setColour (col);
-        g.setFont (theme::capFont (9.2f, 2, 0.0f));
-        g.drawText (titleText, juce::Rectangle<float> (0.0f, 62.0f, (float) getWidth(), 16.0f), juce::Justification::centred, false);
+        const float cap = 10.5f * theme::kCapPerEm;
+        g.setFont (theme::capFont (cap, 1, 0.02f));
+        const float capTop = (float) kHeaderCy + 27.0f + 4.0f;
+        g.drawText (titleText, juce::Rectangle<float> (0.0f, capTop - (cap * 1.663f - cap) * 0.5f, (float) getWidth(), cap * 1.663f), juce::Justification::centred, false);
         return;
     }
     g.setColour (isEnabled() ? theme::text : theme::textDisabled);
@@ -482,7 +484,7 @@ EnableDot::EnableDot (PluginProcessor& p, int paramIndex, const juce::String& wh
 void EnableDot::paint (juce::Graphics& g)
 {
     const bool on = proc.value (index) > 0.5f;
-    auto r = getLocalBounds().toFloat().withSizeKeepingCentre (17.0f, 17.0f);
+    auto r = getLocalBounds().toFloat().withSizeKeepingCentre (13.0f, 13.0f);
     if (on)
     {
         g.setColour (theme::accent.withAlpha (0.14f));
@@ -492,7 +494,7 @@ void EnableDot::paint (juce::Graphics& g)
         g.setGradientFill (juce::ColourGradient (juce::Colour (0xffff7a3c), r.getX(), r.getY(), juce::Colour (0xffe8461a), r.getX(), r.getBottom(), false));
         g.fillEllipse (r);
         g.setColour (juce::Colours::white.withAlpha (0.35f));
-        g.fillEllipse (r.reduced (4.0f).translated (-1.5f, -2.0f).withHeight (3.0f));
+        g.fillEllipse (r.reduced (3.0f).translated (-1.0f, -1.5f).withHeight (2.5f));
     }
     else
     {

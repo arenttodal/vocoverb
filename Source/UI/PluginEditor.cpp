@@ -37,10 +37,15 @@ public:
     {
         getLookAndFeel().drawButtonBackground (g, *this, {}, highlighted, down);
         const auto c = isEnabled() ? theme::text : theme::textDisabled;
-        IconButton::drawIcon (g, icon, juce::Rectangle<float> (24.0f, 22.0f).withCentre ({ 27.0f, (float) getHeight() * 0.5f }), c, false, 1.6f);
+        // 15.5 px icon, 7.5 px gap, label; the pair is centred in the button
+        const auto f = theme::capFont ((float) getProperties().getWithDefault ("capPx", 8.55), 1);
+        constexpr float iconW = 15.5f, gapW = 7.5f;
+        const float tw = juce::GlyphArrangement::getStringWidth (f, getButtonText());
+        const float x0 = ((float) getWidth() - (iconW + gapW + tw)) * 0.5f;
+        IconButton::drawIcon (g, icon, juce::Rectangle<float> (iconW, 14.0f).withCentre ({ x0 + iconW * 0.5f, (float) getHeight() * 0.5f }), c, false, 1.4f);
         g.setColour (c);
-        g.setFont (theme::capFont (10.0f, 1));
-        g.drawText (getButtonText(), getLocalBounds().withTrimmedLeft (52).withTrimmedRight (6), juce::Justification::centredLeft);
+        g.setFont (f);
+        g.drawText (getButtonText(), juce::Rectangle<float> (x0 + iconW + gapW, 0.0f, tw + 4.0f, (float) getHeight()), juce::Justification::centredLeft, false);
     }
 
 private:
@@ -56,7 +61,7 @@ public:
     {
         if (highlighted) { g.setColour (juce::Colours::white.withAlpha (0.25f)); g.fillRect (getLocalBounds()); }
         g.setColour (theme::text);
-        capText (g, getButtonText(), theme::capFont (10.8f, 1), 7.0f, (float) getHeight() * 0.5f - 5.5f, 10.5f, juce::Justification::horizontallyCentred, (float) getWidth());
+        capText (g, getButtonText(), theme::capFont (13.5f * theme::kCapPerEm, 1), 7.0f, (float) getHeight() * 0.5f - 5.5f, 10.5f, juce::Justification::horizontallyCentred, (float) getWidth());
     }
 };
 
@@ -284,10 +289,10 @@ MainView::MainView (PluginProcessor& p, PluginEditor& e)
     };
     saveBtn.onClick = [this] { savePresetDialog(); };
     gearBtn.onClick = [this] { editor.openAdvanced ("Mix / Timing"); };
-    for (auto* b : { &loadBtn, &saveBtn, &gearBtn }) b->getProperties().set ("stroke", 2.3f);
-    for (auto* b : { &prevPreset, &nextPreset }) { b->getProperties().set ("stroke", 1.9f); b->getProperties().set ("iconSize", 30.0f); b->getProperties().set ("stroke", 2.2f); }
-    heart.getProperties().set ("stroke", 1.8f); heart.getProperties().set ("iconSize", 27.0f);
-    loadBtn.getProperties().set ("iconSize", 30.0f); saveBtn.getProperties().set ("iconSize", 29.0f); gearBtn.getProperties().set ("iconSize", 31.0f);
+    for (auto* b : { &loadBtn, &saveBtn, &gearBtn }) b->getProperties().set ("stroke", 1.7f);
+    for (auto* b : { &prevPreset, &nextPreset }) { b->getProperties().set ("iconSize", 22.0f); b->getProperties().set ("stroke", 2.0f); }
+    heart.getProperties().set ("stroke", 1.8f); heart.getProperties().set ("iconSize", 21.0f);
+    loadBtn.getProperties().set ("iconSize", 20.0f); saveBtn.getProperties().set ("iconSize", 19.0f); gearBtn.getProperties().set ("iconSize", 20.0f);
     abSeg.onSelect = [this] (int s) { proc.presets().switchAB (s); refreshPresetName(); };
     abSeg.setTooltip ("A/B comparison of complete states (Settings > Mix / Timing for copy, loudness match, clear tail)");
     abSeg.setTitle ("A/B slot");
@@ -307,13 +312,19 @@ MainView::MainView (PluginProcessor& p, PluginEditor& e)
     panic.onClick = [this] { proc.panic(); };
     tailKill.onClick = [this] { proc.tailKill(); };
     panic.setTitle ("Panic: all notes off"); tailKill.setTitle ("Tail kill: clear wet tails");
-    for (auto* b : { &panic, &tailKill }) b->getProperties().set ("stroke", 1.9f);
+    for (auto* b : { &panic, &tailKill }) { b->getProperties().set ("stroke", 1.7f); b->getProperties().set ("iconSize", 22.0f); }
     latch.setTooltip ("LATCH holds the played harmony after key-up (harmony state). Separate from FREEZE and from the Hold Last policy.");
     freeze.setTooltip ("FREEZE holds the audio ambience (never creates sound by itself). Chords can still change over it in After Space.");
     wetOnly.setTooltip ("WET ONLY removes the dry signal completely (return tracks). It overrides DRY / WET and keeps its value.");
     for (juce::Button* b : std::initializer_list<juce::Button*> { &latch, &freeze, &wetOnly, &advancedBtn, &bbdSync, &ivSync })
         b->getProperties().set ("radius", 6.0f);
     bbdSync.getProperties().set ("capPx", 9.5f); ivSync.getProperties().set ("capPx", 9.5f);
+    // compact action group: 11.75 px medium labels, identical radius / padding for all four
+    for (juce::Button* b : std::initializer_list<juce::Button*> { &latch, &freeze, &wetOnly, &advancedBtn })
+    {
+        b->getProperties().set ("capPx", 11.75 * theme::kCapPerEm);
+        b->getProperties().set ("radius", 5.0f);
+    }
     for (auto* b : { &routeParallel, &routeDR, &routeRD })
     {
         b->getProperties().set ("iconBox", true);
@@ -425,29 +436,33 @@ void MainView::bindModeKnobs()
 void MainView::resized()
 {
     // ---- header (canvas coordinates of the approved reference)
-    prevPreset.setBounds (527, 36, 50, 52);
-    presetName.setBounds (577, 36, 298, 52);
-    heart.setBounds (875, 36, 52, 52);
-    nextPreset.setBounds (927, 36, 51, 52);
-    loadBtn.setBounds (juce::Rectangle<int> (36, 34).withCentre ({ 1070, 62 }));
-    saveBtn.setBounds (juce::Rectangle<int> (34, 36).withCentre ({ 1118, 62 }));
-    gearBtn.setBounds (juce::Rectangle<int> (36, 36).withCentre ({ 1167, 62 }));
-    abSeg.setBounds (1204, 45, 79, 34);
-    inMeter.setBounds (1305, 27, 36, 68);
-    outMeter.setBounds (1342, 27, 37, 68);
-    mixKnob.setBounds (1450 - ParamKnob::kHeaderCx, 55 - ParamKnob::kHeaderCy, ParamKnob::kHeaderW, ParamKnob::kHeaderH);
+    // ---- header: everything centred on theme::kHeaderMidY (62)
+    const int hy = (int) theme::kHeaderMidY;
+    prevPreset.setBounds (527, hy - 20, 50, 40);
+    presetName.setBounds (577, hy - 20, 298, 40);
+    heart.setBounds (875, hy - 20, 52, 40);
+    nextPreset.setBounds (927, hy - 20, 51, 40);
+    loadBtn.setBounds (juce::Rectangle<int> (32, 32).withCentre ({ 1070, hy }));
+    saveBtn.setBounds (juce::Rectangle<int> (32, 32).withCentre ({ 1118, hy }));
+    gearBtn.setBounds (juce::Rectangle<int> (32, 32).withCentre ({ 1167, hy }));
+    abSeg.setBounds (1204, hy - 15, 79, 29);
+    inMeter.setBounds (1305, hy - 34, 36, 68);
+    outMeter.setBounds (1342, hy - 34, 37, 68);
+    // compact Dry/Wet utility: 44 px face, 54 px tick ring, two-line caption; group centred on the header line
+    mixKnob.setBounds (1450 - ParamKnob::kHeaderCx, hy - 38, ParamKnob::kHeaderW, ParamKnob::kHeaderH);
     // ---- delay / reverb
-    dDot.setBounds (juce::Rectangle<int> (24, 24).withCentre ({ 55, 147 }));
-    dMode.setBounds (556, 130, 156, 34);
-    dMenu.setBounds (juce::Rectangle<int> (22, 30).withCentre ({ 736, 147 }));
+    const int ey = (int) theme::kEngineHeaderY, hhy = (int) theme::kHarmonyHeaderY;
+    dDot.setBounds (36, ey - 12, 25, 24);                 // 13 px visible dot, centre x 48.5; hit area stops before the title
+    dMode.setBounds (556, ey - 16, 156, 32);
+    dMenu.setBounds (juce::Rectangle<int> (28, 32).withCentre ({ 736, ey }));
     dGraph.setBounds (42, 170, 704, 215);
     bbdSync.setBounds (670, 182, 61, 28);
     ivSync.setBounds (670, 182, 61, 28);
     const int dX[5] = { 105, 245, 388, 532, 675 }, rX[5] = { 858, 1002, 1143, 1288, 1433 }, hX[4] = { 1024, 1169, 1298, 1433 };
     for (int i = 0; i < 5; ++i) dk[i]->setBounds (dX[i] - ParamKnob::kEngineCx, 459 - ParamKnob::kEngineCy, ParamKnob::kEngineW, ParamKnob::kEngineH);
-    rDot.setBounds (juce::Rectangle<int> (24, 24).withCentre ({ 804, 147 }));
-    rMode.setBounds (1298, 130, 163, 34);
-    rMenu.setBounds (juce::Rectangle<int> (22, 30).withCentre ({ 1486, 147 }));
+    rDot.setBounds (36 + 750, ey - 12, 25, 24);           // same offset from the reverb graph (x 791) as the delay dot
+    rMode.setBounds (1298, ey - 16, 163, 32);
+    rMenu.setBounds (juce::Rectangle<int> (28, 32).withCentre ({ 1486, ey }));
     rGraph.setBounds (791, 170, 704, 215);
     for (int i = 0; i < 5; ++i) rk[i]->setBounds (rX[i] - ParamKnob::kEngineCx, 459 - ParamKnob::kEngineCy, ParamKnob::kEngineW, ParamKnob::kEngineH);
     // ---- routing strip
@@ -456,13 +471,13 @@ void MainView::resized()
     routeRD.setBounds (576, 572, 145, 43);
     placement.setBounds (994, 574, 379, 39);
     // ---- harmony
-    hDot.setBounds (juce::Rectangle<int> (24, 24).withCentre ({ 55, 662 }));
-    chordBadge.setBounds (825, 646, 105, 33);
-    source.setBounds (1084, 645, 132, 35);
-    polHold.setBounds (1232, 645, 62, 35);
-    polRelease.setBounds (1302, 645, 64, 35);
-    polAmbient.setBounds (1374, 645, 65, 35);
-    hMenu.setBounds (juce::Rectangle<int> (22, 30).withCentre ({ 1486, 662 }));
+    hDot.setBounds (36, hhy - 12, 25, 24);
+    chordBadge.setBounds (825, hhy - 16, 105, 32);
+    source.setBounds (1084, hhy - 16, 132, 32);
+    polHold.setBounds (1232, hhy - 16, 62, 32);
+    polRelease.setBounds (1302, hhy - 16, 64, 32);
+    polAmbient.setBounds (1374, hhy - 16, 65, 32);
+    hMenu.setBounds (juce::Rectangle<int> (28, 32).withCentre ({ 1486, hhy }));
     hGraph.setBounds (42, 686, 912, 160);
     hint.setBounds (520, 690, 426, 18);
     for (int i = 0; i < 4; ++i) hk[i]->setBounds (hX[i] - ParamKnob::kEngineCx, 768 - ParamKnob::kEngineCy, ParamKnob::kEngineW, ParamKnob::kEngineH);
@@ -470,12 +485,18 @@ void MainView::resized()
     pitchWheel.setBounds (62 - 23, 877, 46, 100);
     modWheel.setBounds (111 - 23, 877, 46, 100);
     keyboard.setBounds (150, 872, 968, 111);
-    latch.setBounds (1148, 873, 136, 44);
-    freeze.setBounds (1292, 873, 141, 44);
-    wetOnly.setBounds (1148, 929, 136, 47);
-    advancedBtn.setBounds (1292, 929, 141, 47);
-    panic.setBounds (juce::Rectangle<int> (34, 34).withCentre ({ 1477, 897 }));
-    tailKill.setBounds (juce::Rectangle<int> (36, 34).withCentre ({ 1477, 952 }));
+    // compact 2 x 2 action group (110 x 33, 8 px gaps), centred between the divider (x 1134) and the utility column
+    {
+        constexpr int bw = 110, bh = 33, gap = theme::kGap;
+        const int gx = (1134 + 1460) / 2 - (2 * bw + gap) / 2, gy = 866 + (121 - (2 * bh + gap)) / 2;
+        latch.setBounds (gx, gy, bw, bh);
+        freeze.setBounds (gx + bw + gap, gy, bw, bh);
+        wetOnly.setBounds (gx, gy + bh + gap, bw, bh);
+        advancedBtn.setBounds (gx + bw + gap, gy + bh + gap, bw, bh);
+        // utility icons share the button rows' centre lines
+        panic.setBounds (juce::Rectangle<int> (32, 32).withCentre ({ 1477, gy + bh / 2 }));
+        tailKill.setBounds (juce::Rectangle<int> (32, 32).withCentre ({ 1477, gy + bh + gap + bh / 2 }));
+    }
     staticScale = -1.0f;
 }
 
@@ -519,53 +540,55 @@ void MainView::paintStatic (juce::Graphics& g)
     paintCard (g, { 22.0f, 634.0f, 1493.0f, 225.0f });
     paintCard (g, { 22.0f, 866.0f, 1493.0f, 121.0f });
 
-    // title: heavy PLAYABLE + light AMBIENCE on one baseline, ending near x 426
+    // brand: one group (28 px title + 9.75 px subtitle, 7 px apart) centred on the header line y 62
     {
-        const float cap = 27.0f;
-        auto heavy = theme::capFont (cap, 3), light = theme::capFont (cap, 0);
+        const float titleCap = 28.0f * theme::kCapPerEm, subCap = 9.75f * theme::kCapPerEm, gap = 7.0f;
+        const float top = theme::kHeaderMidY - 0.5f * (titleCap + gap + subCap);
+        const auto heavy = theme::capFont (titleCap, 3), regular = theme::capFont (titleCap, 0);
         const juce::String a ("PLAYABLE"), b ("AMBIENCE");
-        const float wa = juce::GlyphArrangement::getStringWidth (heavy, a), wb = juce::GlyphArrangement::getStringWidth (light, b);
-        const float space = 13.0f;
-        const float k = juce::jlimit (-0.05f, 0.08f, (381.0f - space - wa - wb) / (14.0f * heavy.getHeight()));
-        heavy = heavy.withExtraKerningFactor (k); light = light.withExtraKerningFactor (k);
         g.setColour (theme::text);
         juce::GlyphArrangement ga;
-        ga.addLineOfText (heavy, a, 45.5f, 40.0f + cap);
-        const float wa2 = juce::GlyphArrangement::getStringWidth (heavy, a);
-        ga.addLineOfText (light, b, 45.5f + wa2 + space, 40.0f + cap);
+        ga.addLineOfText (heavy, a, 46.0f, top + titleCap);
+        ga.addLineOfText (regular, b, 46.0f + juce::GlyphArrangement::getStringWidth (heavy, a) + titleCap * 0.42f, top + titleCap);
         ga.draw (g);
-        const auto sub = theme::capFont (9.0f, 0);
-        const juce::String st ("VOCODED DELAY & REVERB");
+        auto sub = theme::capFont (subCap, 0);
+        sub = sub.withExtraKerningFactor (2.75f / sub.getHeight()); // ~2.75 px tracking
         g.setColour (theme::textMuted);
-        capText (g, st, sub.withExtraKerningFactor (trackingToFit (sub, st, 306.0f)), 48.0f, 80.0f, 9.0f);
+        capText (g, "VOCODED DELAY & REVERB", sub, 47.0f, top + titleCap + gap, subCap);
     }
-    // preset bar
+    // preset bar: 40 px high, same segments, centred on the header line
     {
-        const juce::Rectangle<float> bar (527.0f, 36.0f, 451.0f, 52.0f);
-        paintField (g, bar, 8.0f, true);
-        paintField (g, { 577.5f, 37.0f, 297.0f, 50.0f }, 4.0f, true);
+        const juce::Rectangle<float> bar (527.0f, theme::kHeaderMidY - 20.0f, 451.0f, 40.0f);
+        paintField (g, bar, 7.0f, true);
+        paintField (g, { 577.5f, bar.getY() + 1.0f, 297.0f, 38.0f }, 4.0f, true);
         g.setColour (juce::Colour (0xffd5ccbd));
         for (float x : { 577.0f, 875.0f, 927.0f }) g.fillRect (juce::Rectangle<float> (x - 0.5f, bar.getY() + 1.0f, 1.0f, bar.getHeight() - 2.0f));
     }
     // dividers
     g.setColour (juce::Colour (0xffd6cdbf));
-    g.fillRect (juce::Rectangle<float> (1293.5f, 40.0f, 1.0f, 56.0f));
-    g.fillRect (juce::Rectangle<float> (795.0f, 574.0f, 1.0f, 39.0f));
-    g.fillRect (juce::Rectangle<float> (1133.0f, 878.0f, 1.0f, 98.0f));
+    // dividers: equal insets within their strip / header line
+    g.fillRect (juce::Rectangle<float> (1293.5f, theme::kHeaderMidY - 18.0f, 1.0f, 36.0f));
+    g.fillRect (juce::Rectangle<float> (795.0f, 575.0f, 1.0f, 39.0f));   // routing strip 563..626: 12 px insets
+    g.fillRect (juce::Rectangle<float> (1133.0f, 878.0f, 1.0f, 97.0f));  // performance card 866..987: 12 px insets
     g.setColour (juce::Colours::white.withAlpha (0.6f));
-    g.fillRect (juce::Rectangle<float> (1294.5f, 40.0f, 1.0f, 56.0f));
-    g.fillRect (juce::Rectangle<float> (796.0f, 574.0f, 1.0f, 39.0f));
-    g.fillRect (juce::Rectangle<float> (1134.0f, 878.0f, 1.0f, 98.0f));
+    g.fillRect (juce::Rectangle<float> (1294.5f, theme::kHeaderMidY - 18.0f, 1.0f, 36.0f));
+    g.fillRect (juce::Rectangle<float> (796.0f, 575.0f, 1.0f, 39.0f));
+    g.fillRect (juce::Rectangle<float> (1134.0f, 878.0f, 1.0f, 97.0f));
 
     // section titles and strip labels
     g.setColour (theme::text);
-    capText (g, "DELAY", theme::capFont (18.0f, 3, 0.01f), 78.0f, 137.0f, 18.0f);
-    capText (g, "REVERB", theme::capFont (18.0f, 3, 0.0f), 827.0f, 137.0f, 18.0f);
-    capText (g, "HARMONY", theme::capFont (19.0f, 3, -0.025f), 78.0f, 652.0f, 19.0f);
+    // section headings: one size/weight, visible cap centred on the card's header line, 10 px after the dot
+    {
+        const float cap = theme::kSectionTitleEm * theme::kCapPerEm;
+        const auto f = theme::capFont (cap, 3, 0.01f);
+        capText (g, "DELAY", f, theme::kSectionTitleX, theme::kEngineHeaderY - cap * 0.5f, cap);
+        capText (g, "REVERB", f, 772.0f - 22.0f + theme::kSectionTitleX - 1.0f, theme::kEngineHeaderY - cap * 0.5f, cap);
+        capText (g, "HARMONY", f, theme::kSectionTitleX, theme::kHarmonyHeaderY - cap * 0.5f, cap);
+    }
     g.setColour (theme::textLabel);
     capText (g, "ROUTING", theme::capFont (10.0f, 1, 0.07f), 163.0f, 588.0f, 10.0f);
     capText (g, "PLACEMENT", theme::capFont (10.0f, 1, 0.07f), 871.0f, 588.0f, 10.0f);
-    capText (g, "SOURCE", theme::capFont (9.3f, 1, 0.0f), 1016.0f, 658.0f, 9.5f);
+    capText (g, "SOURCE", theme::capFont (9.3f, 1, 0.0f), 1016.0f, theme::kHarmonyHeaderY - 4.65f, 9.3f);
 }
 
 juce::String MainView::midiStatusText() const

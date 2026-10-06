@@ -11,12 +11,12 @@ class ParamKnob : public juce::Component
 {
 public:
     /** Engine: label above, 68 px face, value field below (bounds 140 x 146, knob centre at local (70, 64)).
-        Header: ~58 px face with label and value text below (bounds 120 x 100, knob centre at local (60, 36)). */
+        Header: compact 44 px face (54 px tick ring) with a two-line caption below (bounds 96 x 84, knob centre (48, 27)). */
     enum class Style { Engine, Header, Compact };
     ParamKnob (PluginProcessor& p, int paramIndex, const juce::String& title, bool compact = false);
     ParamKnob (PluginProcessor& p, int paramIndex, const juce::String& title, Style style);
     static constexpr int kEngineW = 140, kEngineH = 146, kEngineCx = 70, kEngineCy = 64;
-    static constexpr int kHeaderW = 120, kHeaderH = 100, kHeaderCx = 60, kHeaderCy = 33;
+    static constexpr int kHeaderW = 96, kHeaderH = 84, kHeaderCx = 48, kHeaderCy = 27;
     void bind (int paramIndex, const juce::String& title);
     int boundParam() const noexcept { return index; }
     void resized() override;

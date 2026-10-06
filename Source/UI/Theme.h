@@ -7,6 +7,15 @@
 namespace pa::theme
 {
 inline constexpr int kCanvasW = 1536, kCanvasH = 1024;
+// Layout tokens (canonical logical px). Inter: cap height = 0.7275 em.
+inline constexpr float kCapPerEm = 0.7275f;
+inline constexpr float kHeaderMidY = 62.0f;      // optical centre line of the brand / preset / utilities / Dry-Wet
+inline constexpr float kEngineHeaderY = 146.0f;  // Delay / Reverb header row centre
+inline constexpr float kHarmonyHeaderY = 662.0f; // Harmony header row centre
+inline constexpr float kSectionTitleEm = 20.5f;  // DELAY / REVERB / HARMONY
+inline constexpr float kSectionDotX = 48.5f;     // dot centre: its left edge (13 px dot) on the graph's left edge x 42
+inline constexpr float kSectionTitleX = 65.0f;   // 10 px after the dot's visible edge
+inline constexpr int kGap = 8, kGroupGap = 12;   // spacing system: 4 caption / 8 internal / 12 related / 16 separation
 
 // surfaces
 inline const juce::Colour backdrop { 0xffebe6de };      // outside the shell
